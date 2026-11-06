@@ -1,0 +1,129 @@
+#ifndef OUTGOINGDATACREATOR_H
+#define OUTGOINGDATACREATOR_H
+
+#include <QImage>
+#include <QList>
+#include <QMap>
+#include <QPointer>
+#include <QQueue>
+#include <QTcpSocket>
+#include <QTimer>
+#include <memory>
+
+#include "core/application.h"
+#include "core/player.h"
+#include "core/urlhandler.h"
+#include "engines/engine_fwd.h"
+#include "engines/enginebase.h"
+#include "globalsearch/globalsearch.h"
+#include "playlist/playlist.h"
+#include "playlist/playlistbackend.h"
+#include "playlist/playlistmanager.h"
+#include "remoteclient.h"
+#include "remotecontrolmessages.pb.h"
+#include "songinfo/lyricsfetcher.h"
+
+struct GlobalSearchRequest {
+  int id_;
+  QString query_;
+  // Clients are deleted when they disconnect, which can happen before the
+  // search finishes; QPointer turns null instead of dangling.
+  QPointer<RemoteClient> client_;
+  GlobalSearchRequest() : id_(-1), client_(nullptr) {}
+  GlobalSearchRequest(int i, const QString& q, RemoteClient* c)
+      : id_(i), query_(q), client_(c) {}
+};
+
+class OutgoingDataCreator : public QObject {
+  Q_OBJECT
+ public:
+  OutgoingDataCreator(Application* app);
+  ~OutgoingDataCreator();
+
+  static const quint32 kFileChunkSize;
+
+  void SetClients(QList<RemoteClient*>* clients);
+  void SetRemoteRootFiles(const QString& files_root_folder) {
+    files_root_folder_ = files_root_folder;
+  }
+  void SetMusicExtensions(const QStringList& files_music_extensions) {
+    files_music_extensions_ = files_music_extensions;
+  }
+  void SetAllowDownloads(bool allow_downloads) {
+    allow_downloads_ = allow_downloads;
+  }
+  void SetStreamingEnabled(bool enabled) { streaming_enabled_ = enabled; }
+  void SetSyncEnabled(bool enabled) { sync_enabled_ = enabled; }
+  void SendDataToClients(cpb::remote::Message* msg);
+  static void CreateSong(const Song& song, const QImage& art, const int index,
+                         cpb::remote::SongMetadata* song_metadata);
+  // Whether a remote can keep |song| on the phone, asking |handler|, the
+  // UrlHandler for its scheme (null for none).
+  static cpb::remote::Downloadability DownloadabilityOf(
+      const Song& song, const UrlHandler* handler);
+
+ public slots:
+  void SendClementineInfo();
+  void SendAllPlaylists();
+  void SendAllActivePlaylists();
+  void SendFirstData(bool send_playlist_songs);
+  void SendPlaylistSongs(int id);
+  void PlaylistChanged(Playlist*);
+  void VolumeChanged(int volume);
+  void PlaylistAdded(int id, const QString& name, bool favorite);
+  void PlaylistDeleted(int id);
+  void PlaylistClosed(int id);
+  void PlaylistRenamed(int id, const QString& new_name);
+  void ActiveChanged(Playlist*);
+  void CurrentSongChanged(const Song& song, const QString& uri,
+                          const QImage& img);
+  void SendSongMetadata();
+  void StateChanged(Engine::State);
+  void SendKeepAlive();
+  void SendRepeatMode(PlaylistSequence::RepeatMode mode);
+  void SendShuffleMode(PlaylistSequence::ShuffleMode mode);
+  void UpdateTrackPosition();
+  void DisconnectAllClients();
+  void GetLyrics();
+  void SendLyrics(int id, const Lyrics& lyrics);
+  void SendLibrary(RemoteClient* client);
+  void EnableKittens(bool aww);
+  void SendKitten(const QImage& kitten);
+
+  void DoGlobalSearch(const QString& query, RemoteClient* client);
+  void ResultsAvailable(int id, const SearchProvider::ResultList& results);
+  void SearchFinished(int id);
+
+  void SendListFiles(QString relative_path, RemoteClient* client);
+  void SendSavedRadios(RemoteClient* client);
+
+ private:
+  // CreateSong, and with --media-sync, whether the song can be downloaded.
+  void CreateSongForSync(const Song& song, const QImage& art, int index,
+                         cpb::remote::SongMetadata* song_metadata) const;
+
+  Application* app_;
+  QList<RemoteClient*>* clients_;
+  Song current_song_;
+  QString current_uri_;
+  QImage current_image_;
+  Engine::State last_state_;
+  QTimer* keep_alive_timer_;
+  QTimer* track_position_timer_;
+  int keep_alive_timeout_;
+  int last_track_position_;
+  bool aww_;
+  QString files_root_folder_;
+  QStringList files_music_extensions_;
+  bool allow_downloads_;
+  bool streaming_enabled_ = false;
+  bool sync_enabled_ = false;
+
+  LyricsFetcher* lyrics_fetcher_;
+
+  QMap<int, GlobalSearchRequest> global_search_result_map_;
+
+  void SetEngineState(cpb::remote::ResponseClementineInfo* msg);
+};
+
+#endif  // OUTGOINGDATACREATOR_H
