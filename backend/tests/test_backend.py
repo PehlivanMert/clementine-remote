@@ -63,3 +63,13 @@ def test_auth_flow():
     assert res.status_code == 200
     search_data = res.json()
     assert "tracks" in search_data
+def test_spa_serving():
+    res = client.get("/")
+    assert res.status_code == 200
+    assert "<!doctype html>" in res.text
+    assert "Clementine Web Remote" in res.text
+
+def test_manifest_serving():
+    res = client.get("/manifest.webmanifest")
+    assert res.status_code == 200
+    assert "Clementine Web Remote" in res.text

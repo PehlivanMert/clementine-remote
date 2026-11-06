@@ -1,0 +1,14 @@
+[Unit]
+Description=Clementine Web Remote Control Server
+After=network.target sound.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/mert/clementine-web-remote
+Environment="PYTHONPATH=/home/mert/clementine-web-remote"
+ExecStart=/home/mert/clementine-web-remote/backend/venv/bin/python3 -m uvicorn backend.app.main:app --host 0.0.0.0 --port 8000
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target

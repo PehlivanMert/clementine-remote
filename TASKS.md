@@ -22,46 +22,46 @@
   - [x] Verified connection behavior: connecting over `::1` or `172.20.5.94` works cleanly.
 
 ## Phase 3: Backend Implementation (FastAPI + Asyncio)
-- [ ] Implement Clementine TCP protocol client (`backend/app/adapters/clementine/`).
-  - Wire framing (4-byte big endian header).
-  - Reconnection and keep-alive handling.
-  - State tracking (player state, current track, volume, playlist, repeat/shuffle).
-  - Album art cache (serving memory/disk cached JPEG).
-- [ ] Implement WebSocket manager for real-time state broadcast.
-- [ ] Implement FastAPI REST API:
-  - `/api/player/status`, `/play`, `/pause`, `/next`, `/previous`, `/seek`, `/volume`, `/shuffle`, `/repeat`
-  - `/api/playlist/` (list playlists, active playlist songs, change song, remove, insert)
-  - `/api/library/` (read-only SQLite query for instant fast artist/album/track browsing)
-  - `/api/artwork/{track_id}` (artwork delivery)
-  - `/api/system/info` (network IP, connection status)
-- [ ] Implement Web Authentication (password protection, session/token).
-- [ ] Unit & integration tests for backend.
+- [x] Implement Clementine TCP protocol client (`backend/app/adapters/clementine/`).
+  - [x] Wire framing (4-byte big endian header).
+  - [x] Reconnection and keep-alive handling.
+  - [x] State tracking (player state, current track, volume, playlist, repeat/shuffle).
+  - [x] Album art cache (serving memory/disk cached JPEG).
+- [x] Implement WebSocket manager for real-time state broadcast.
+- [x] Implement FastAPI REST API:
+  - [x] `/api/player/status`, `/play`, `/pause`, `/next`, `/previous`, `/seek`, `/volume`, `/shuffle`, `/repeat`
+  - [x] `/api/playlist/` (list playlists, active playlist songs, change song, remove, insert)
+  - [x] `/api/library/` (read-only SQLite query for instant fast artist/album/track browsing)
+  - [x] `/api/artwork/{track_id}` (artwork delivery)
+  - [x] `/api/system/info` (network IP, connection status)
+- [x] Implement Web Authentication (password protection, session/token).
+- [x] Unit & integration tests for backend.
 
 ## Phase 4: Frontend Implementation (React + TypeScript + Vite + Tailwind CSS)
-- [ ] Initialize React + Vite + Tailwind CSS project with Lucide icons.
-- [ ] Build mobile-first Dark Hi-Fi design system (Roon/TIDAL style).
-- [ ] Implement Now Playing screen (artwork, progress slider, controls, volume).
-- [ ] Implement Queue / Playlist screen (track list, active track, jump, reorder/remove).
-- [ ] Implement Library screen (Artists, Albums, Tracks grid/list).
-- [ ] Implement Search screen (debounced instant search across library).
-- [ ] Implement Settings screen (Clementine connection status, LAN IP info, logout).
-- [ ] Implement WebSocket client hook with auto-reconnection and optimistic UI updates.
+- [x] Initialize React + Vite + Tailwind CSS project with Lucide icons.
+- [x] Build mobile-first Dark Hi-Fi design system (Roon/TIDAL style).
+- [x] Implement Now Playing screen (artwork, progress slider, controls, volume).
+- [x] Implement Queue / Playlist screen (track list, active track, jump, reorder/remove).
+- [x] Implement Library screen (Artists, Albums, Tracks grid/list).
+- [x] Implement Search screen (debounced instant search across library).
+- [x] Implement Settings screen (Clementine connection status, LAN IP info, logout).
+- [x] Implement WebSocket client hook with auto-reconnection and optimistic UI updates.
 
 ## Phase 5: PWA & Mobile Polish
-- [ ] Web App Manifest (`manifest.webmanifest`), icons, theme color (`#0c0d10`).
-- [ ] iOS Safari standalone mode, notch/safe-area handling (`env(safe-area-inset-top)`).
-- [ ] Responsive layouts for iPhone portrait/landscape, iPad, and desktop.
-- [ ] Offline fallback state indicating local server status.
+- [x] Web App Manifest (`manifest.webmanifest`), icons, theme color (`#0c0d10`).
+- [x] iOS Safari standalone mode, notch/safe-area handling (`env(safe-area-inset-top)`).
+- [x] Responsive layouts for iPhone portrait/landscape, iPad, and desktop.
+- [x] Offline fallback state indicating local server status.
 
 ## Phase 6: Integration & End-to-End Verification
-- [ ] Build frontend production bundle and serve statically from FastAPI.
-- [ ] Verify complete end-to-end control with Clementine running.
-- [ ] Run Playwright automated browser tests.
-- [ ] Verify reconnect behavior when connection drops.
+- [x] Build frontend production bundle and serve statically from FastAPI.
+- [x] Verify complete end-to-end control with Clementine running.
+- [x] Run Playwright automated browser tests (iPhone 14 Pro emulation).
+- [x] Verify reconnect behavior when connection drops.
 
 ## Phase 7: Deployment & Delivery
-- [ ] `install.sh`, `start.sh`, `stop.sh`, `update.sh`.
-- [ ] Systemd service file template.
-- [ ] `.env.example`, `.gitignore`.
-- [ ] Comprehensive `README.md` and troubleshooting guide.
-- [ ] Git commits for all milestones.
+- [x] `install.sh`, `start.sh`, `stop.sh`, `update.sh`.
+- [x] Systemd service file template (`systemd/clementine-web-remote.service`).
+- [x] `.env.example`, `.gitignore`.
+- [x] Comprehensive `README.md` and troubleshooting guide.
+- [x] Git commits for all milestones.
