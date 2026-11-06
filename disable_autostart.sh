@@ -1,0 +1,1 @@
+scripts/disable_autostart.sh

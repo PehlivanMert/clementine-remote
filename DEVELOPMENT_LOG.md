@@ -73,3 +73,18 @@
   - Tested: login unlock, Now Playing render, Volume Up click, Queue navigation with Clear Queue modal cancel, Library albums with real cover artwork, Artists subtab, debounced search query ("Pink"), and System info with verified `172.20.5.94`.
   - All 7 screenshots verified and saved in `screenshots/`.
   - Full automated suite: 13 backend tests + 14 frontend unit tests + Playwright E2E passed cleanly.
+
+### Phase 8: Lifecycle Automation & Browser Integration
+- **Objective**: Automate startup and shutdown of Web Remote server and dedicated browser window when Clementine opens and closes, with native desktop notifications.
+- **Implementation**:
+  - `scripts/clementine_watcher.py`: Event-driven D-Bus MPRIS `NameOwnerChanged` signal listener combined with a 2-second proc scan safety net. Consumes 0.00% CPU when idle.
+  - Server Management: Launches uvicorn backend on port 8000, polls `/api/system/info` until healthy, and retrieves detected LAN IP (`http://172.20.5.94:8000`).
+  - Browser Management: Launches browser in isolated `--app=http://127.0.0.1:8000` mode with dedicated profile (`~/.config/clementine-web-remote/browser-profile`). This provides a frameless desktop-app experience and ensures terminating the process group closes only the Clementine Web Remote window without touching any of the user's personal browser tabs/sessions.
+  - Desktop Notifications: Fires `notify-send -i clementine -a "Clementine Web Remote"` on startup (informing that Web Remote is active and providing the iPhone Safari URL) and on shutdown (informing that Web Remote is stopped).
+  - Process Lifecycle & Teardown: Uses Linux process groups (`start_new_session=True` / `os.killpg`) to ensure 0 orphaned browser or server processes when Clementine exits.
+  - Systemd Service & Controls: Created `systemd/clementine-watcher.service`, `enable_autostart.sh`, `disable_autostart.sh`, and `status_autostart.sh`.
+- **Verification**:
+  - Added `backend/tests/test_lifecycle_watcher.py` (7 tests covering process detection, port check, browser discovery, notifications, and start/stop integration).
+  - All 20 backend/integration tests pass.
+  - All 14 frontend unit tests pass.
+  - Executed multiple live end-to-end cycles opening Clementine and closing Clementine, observing journalctl logs, notifications, server, and browser processes.

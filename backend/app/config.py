@@ -85,6 +85,10 @@ class Settings(BaseSettings):
     ARTWORK_CACHE_DIR: str = "/tmp/clementine_art_cache"
     FRONTEND_DIST_DIR: str = "/home/mert/clementine-web-remote/frontend/dist"
 
+    # Browser & Lifecycle Automation
+    AUTO_OPEN_BROWSER: bool = True
+    BROWSER_APP_MODE: bool = True
+
     # Production-safe CORS: Restrict to localhost and local network origins
     CORS_ORIGINS: List[str] = [
         "http://localhost:8000",

@@ -69,7 +69,33 @@ The installer verifies prerequisites, creates the Python virtual environment (`b
 
 ---
 
-## Starting and Stopping
+## Automatic Lifecycle & Browser Integration (Otomatik Başlatma & Kapatma)
+
+Clementine Web Remote includes an event-driven systemd daemon (`clementine-watcher.service`) that monitors Clementine's lifecycle with 0% idle CPU overhead:
+- **When Clementine opens**:
+  - The Web Remote server starts automatically in the background.
+  - An isolated application window opens directly to `http://127.0.0.1:8000`.
+  - A desktop notification (`notify-send`) is shown with the active status and iPhone Safari URL (`http://172.20.5.94:8000`).
+- **When Clementine closes**:
+  - The dedicated browser window closes automatically.
+  - The Web Remote server shuts down cleanly.
+  - A desktop notification informs that Clementine Web Remote has stopped.
+
+### Autostart Controls:
+```bash
+# Enable and start the background watcher
+./enable_autostart.sh
+
+# Check watcher, Clementine, server, and browser status
+./status_autostart.sh
+
+# Disable and stop the background watcher
+./disable_autostart.sh
+```
+
+---
+
+## Starting and Stopping (Manual)
 
 ### Interactive / CLI:
 

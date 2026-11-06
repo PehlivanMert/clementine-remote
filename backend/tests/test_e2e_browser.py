@@ -78,7 +78,7 @@ def test_iphone_safari_experience(live_server):
             page.wait_for_timeout(300)
 
         # 5. Tab Navigation: Library
-        page.click('text=Library')
+        page.click('nav >> text=Library')
         page.wait_for_timeout(800)
         page.screenshot(path="/home/mert/clementine-web-remote/screenshots/04_library_albums_iphone.png")
         assert page.locator('button:has-text("albums")').is_visible()

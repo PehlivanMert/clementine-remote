@@ -87,3 +87,14 @@
 - [x] `.env.example`, `.gitignore`, `pytest.ini`.
 - [x] Comprehensive `README.md` and troubleshooting guide.
 - [x] Git commits for all milestones.
+
+## Phase 8: Lifecycle Automation & Browser Integration
+- [x] Implement event-driven D-Bus (`NameOwnerChanged`) and proc fallback watcher daemon (`scripts/clementine_watcher.py`).
+- [x] Implement automatic uvicorn backend server startup & readiness verification.
+- [x] Implement dedicated isolated browser window launch (`--app=http://127.0.0.1:8000` with custom user-data-dir).
+- [x] Implement desktop notification dispatching via `notify-send` for start (with LAN iPhone URL) and stop events.
+- [x] Implement automatic clean browser and server teardown upon Clementine termination.
+- [x] Create user systemd service definition (`systemd/clementine-watcher.service`).
+- [x] Provide autostart setup scripts: `enable_autostart.sh`, `disable_autostart.sh`, `status_autostart.sh`.
+- [x] Automated unit and integration tests (`backend/tests/test_lifecycle_watcher.py`).
+- [x] End-to-end verification of Clementine launch, notification, browser popup, Clementine quit, browser closing, server shutdown, and stop notification.
