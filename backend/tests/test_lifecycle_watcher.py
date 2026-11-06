@@ -1,3 +1,4 @@
+import json
 import os
 import shutil
 import socket
@@ -14,6 +15,11 @@ from scripts.clementine_watcher import (
     is_port_open,
     send_notification,
     get_system_info,
+    get_configured_bool,
+    detect_fallback_lan_ip,
+    clean_browser_profile_state,
+    BROWSER_PID_FILE,
+    SERVER_PID_FILE,
 )
 
 
@@ -60,15 +66,20 @@ def test_send_notification():
 
 
 def test_lifecycle_manager_status():
-    """Verify get_status returns a well-formed dictionary."""
+    """Verify get_status returns a well-formed dictionary with real daemon/browser metrics."""
     manager = ClementineLifecycleManager(port=8000)
     status = manager.get_status()
 
     assert "clementine_running" in status
     assert "clementine_pid" in status
     assert "server_running" in status
+    assert "server_pid" in status
     assert "server_port" in status
+    assert "browser_running" in status
+    assert "browser_pid" in status
     assert "browser_profile" in status
+    assert "watcher_daemon_running" in status
+    assert "watcher_daemon_pid" in status
     assert "watcher_active_state" in status
     assert status["server_port"] == 8000
 
@@ -124,3 +135,74 @@ def test_lifecycle_server_and_browser_start_stop():
     finally:
         manager.stop_server()
         manager.close_browser()
+
+
+def test_on_clementine_closed_force_when_not_active(tmp_path):
+    """Verify on_clementine_closed(force=True) terminates components even if is_active is False."""
+    manager = ClementineLifecycleManager(port=8000)
+    assert manager.is_active is False
+
+    # Simulate a fake tracked PID file
+    dummy_pid = 99999999
+    BROWSER_PID_FILE.write_text(str(dummy_pid))
+    try:
+        manager.on_clementine_closed(force=True)
+        assert not BROWSER_PID_FILE.is_file()
+    finally:
+        BROWSER_PID_FILE.unlink(missing_ok=True)
+
+
+def test_get_configured_bool_settings(monkeypatch):
+    """Verify boolean config parsing for AUTO_OPEN_BROWSER and BROWSER_APP_MODE."""
+    monkeypatch.setenv("TEST_FLAG_TRUE", "true")
+    monkeypatch.setenv("TEST_FLAG_FALSE", "false")
+    monkeypatch.setenv("TEST_FLAG_ONE", "1")
+    monkeypatch.setenv("TEST_FLAG_ZERO", "0")
+
+    assert get_configured_bool("TEST_FLAG_TRUE", False) is True
+    assert get_configured_bool("TEST_FLAG_FALSE", True) is False
+    assert get_configured_bool("TEST_FLAG_ONE", False) is True
+    assert get_configured_bool("TEST_FLAG_ZERO", True) is False
+    assert get_configured_bool("NON_EXISTENT_VAR", True) is True
+    assert get_configured_bool("NON_EXISTENT_VAR", False) is False
+
+
+def test_detect_fallback_lan_ip_validity():
+    """Verify fallback LAN IP detection returns a valid IPv4 string."""
+    ip = detect_fallback_lan_ip()
+    assert isinstance(ip, str)
+    parts = ip.split(".")
+    assert len(parts) == 4
+    for p in parts:
+        assert p.isdigit()
+        assert 0 <= int(p) <= 255
+
+
+def test_clean_browser_profile_state(tmp_path):
+    """Verify Chromium profile preferences are sanitized to avoid crash recovery bubbles."""
+    profile_dir = tmp_path / "browser-profile"
+    default_dir = profile_dir / "Default"
+    default_dir.mkdir(parents=True)
+    pref_file = default_dir / "Preferences"
+    pref_file.write_text(json.dumps({
+        "profile": {
+            "exit_type": "Crashed",
+            "exited_cleanly": False,
+        }
+    }))
+
+    clean_browser_profile_state(profile_dir)
+
+    data = json.loads(pref_file.read_text())
+    assert data["profile"]["exit_type"] == "Normal"
+    assert data["profile"]["exited_cleanly"] is True
+
+
+def test_pygobject_dbus_available():
+    """Verify gi / Gio can be imported successfully in the current Python environment."""
+    import sys
+    if "/usr/lib/python3/dist-packages" not in sys.path and Path("/usr/lib/python3/dist-packages/gi").is_dir():
+        sys.path.append("/usr/lib/python3/dist-packages")
+    import gi
+    from gi.repository import Gio
+    assert Gio is not None

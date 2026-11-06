@@ -28,6 +28,10 @@ import urllib.request
 from pathlib import Path
 from typing import Optional, Tuple
 
+# Ensure system dist-packages is available for PyGObject / D-Bus even when in venv
+if "/usr/lib/python3/dist-packages" not in sys.path and Path("/usr/lib/python3/dist-packages/gi").is_dir():
+    sys.path.append("/usr/lib/python3/dist-packages")
+
 # Configuration & Paths
 SCRIPT_DIR = Path(__file__).resolve().parent
 PROJECT_DIR = SCRIPT_DIR.parent
@@ -93,6 +97,27 @@ def get_configured_port() -> int:
             pass
 
     return DEFAULT_PORT
+
+
+def get_configured_bool(key: str, default: bool = True) -> bool:
+    """Read boolean configuration from environment or .env file."""
+    if key in os.environ:
+        val = os.environ[key].strip().lower()
+        return val in ("1", "true", "yes", "on")
+
+    env_path = PROJECT_DIR / ".env"
+    if env_path.is_file():
+        try:
+            with open(env_path, "r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if line.startswith(f"{key}="):
+                        val = line.split("=", 1)[1].split("#")[0].strip().strip('"').strip("'").lower()
+                        return val in ("1", "true", "yes", "on")
+        except Exception:
+            pass
+
+    return default
 
 
 def send_notification(title: str, body: str, urgency: str = "normal") -> bool:
@@ -172,15 +197,75 @@ def get_system_info(port: int) -> Optional[dict]:
 
 def detect_fallback_lan_ip() -> str:
     """Detect LAN IP address if backend server is not yet queried."""
+    # 1. Try importing from backend config
     try:
-        out = subprocess.check_output(["ip", "-4", "addr", "show", "wlo1"], text=True, timeout=2.0)
-        import re
-        m = re.search(r"inet\s+(\d+\.\d+\.\d+\.\d+)", out)
-        if m:
-            return m.group(1)
+        if str(PROJECT_DIR) not in sys.path:
+            sys.path.insert(0, str(PROJECT_DIR))
+        from backend.app.config import detect_lan_ip  # type: ignore
+        return detect_lan_ip()
     except Exception:
         pass
+
+    # 2. Dynamic inspection across all interfaces
+    try:
+        out = subprocess.check_output(["ip", "-j", "addr", "show"], text=True, timeout=2.0)
+        interfaces = json.loads(out)
+        candidates = []
+        for iface in interfaces:
+            ifname = iface.get("ifname", "")
+            flags = iface.get("flags", [])
+            if "UP" not in flags or "LOOPBACK" in flags:
+                continue
+            if ifname.startswith(("docker", "br-", "virbr", "veth", "tun", "tap", "wg", "Cloudflare", "tailscale")):
+                continue
+            for addr in iface.get("addr_info", []):
+                if addr.get("family") == "inet":
+                    ip = addr.get("local")
+                    if ip and not ip.startswith("127."):
+                        priority = 2 if ifname.startswith(("wl", "wlan", "wifi")) else 1
+                        candidates.append((priority, ip))
+        if candidates:
+            candidates.sort(key=lambda x: x[0], reverse=True)
+            return candidates[0][1]
+    except Exception:
+        pass
+
+    # 3. Secondary fallback via default routing
+    try:
+        out = subprocess.check_output(["ip", "route", "show", "default"], text=True, timeout=2.0)
+        for line in out.splitlines():
+            parts = line.split()
+            if "src" in parts:
+                idx = parts.index("src")
+                if idx + 1 < len(parts):
+                    cand = parts[idx + 1]
+                    if not cand.startswith("172.16.0."):
+                        return cand
+    except Exception:
+        pass
+
     return "172.20.5.94"
+
+
+def clean_browser_profile_state(profile_dir: Path) -> None:
+    """Ensure Chromium profile does not display crash recovery restore dialogs."""
+    pref_file = profile_dir / "Default" / "Preferences"
+    if pref_file.is_file():
+        try:
+            content = pref_file.read_text(encoding="utf-8")
+            data = json.loads(content)
+            changed = False
+            if "profile" in data and isinstance(data["profile"], dict):
+                if data["profile"].get("exit_type") != "Normal":
+                    data["profile"]["exit_type"] = "Normal"
+                    changed = True
+                if data["profile"].get("exited_cleanly") is not True:
+                    data["profile"]["exited_cleanly"] = True
+                    changed = True
+            if changed:
+                pref_file.write_text(json.dumps(data), encoding="utf-8")
+        except Exception:
+            pass
 
 
 def find_browser() -> Tuple[Optional[str], str]:
@@ -189,6 +274,18 @@ def find_browser() -> Tuple[Optional[str], str]:
     Returns (browser_executable_path, browser_type)
     where browser_type is 'chromium', 'firefox', or 'generic'.
     """
+    # 1. Check custom environment variable
+    custom = os.environ.get("BROWSER_BIN") or os.environ.get("BROWSER")
+    if custom:
+        path = shutil.which(custom)
+        if path:
+            name = Path(path).name.lower()
+            if any(k in name for k in ("chrome", "chromium", "brave", "edge")):
+                return path, "chromium"
+            if "firefox" in name:
+                return path, "firefox"
+            return path, "generic"
+
     candidates = [
         ("brave-browser", "chromium"),
         ("google-chrome", "chromium"),
@@ -208,9 +305,19 @@ def find_browser() -> Tuple[Optional[str], str]:
 class ClementineLifecycleManager:
     """Manages the full lifecycle of Clementine Web Remote server, browser, and alerts."""
 
-    def __init__(self, port: Optional[int] = None, enable_browser: bool = True):
+    def __init__(
+        self,
+        port: Optional[int] = None,
+        enable_browser: Optional[bool] = None,
+        app_mode: Optional[bool] = None,
+    ):
         self.port = port or get_configured_port()
-        self.enable_browser = enable_browser
+        self.enable_browser = (
+            enable_browser if enable_browser is not None else get_configured_bool("AUTO_OPEN_BROWSER", True)
+        )
+        self.app_mode = (
+            app_mode if app_mode is not None else get_configured_bool("BROWSER_APP_MODE", True)
+        )
         self.server_proc: Optional[subprocess.Popen] = None
         self.browser_proc: Optional[subprocess.Popen] = None
         self.is_active = False
@@ -257,6 +364,8 @@ class ClementineLifecycleManager:
         except Exception as e:
             logger.error("Failed to start server: %s", e)
             return False
+        finally:
+            log_file.close()
 
         # Wait for server to become responsive
         max_attempts = 50  # 5 seconds
@@ -292,7 +401,11 @@ class ClementineLifecycleManager:
             try:
                 pid = int(SERVER_PID_FILE.read_text().strip())
                 if pid > 0 and pid != os.getpid():
-                    os.kill(pid, signal.SIGTERM)
+                    try:
+                        pgid = os.getpgid(pid)
+                        os.killpg(pgid, signal.SIGTERM)
+                    except Exception:
+                        os.kill(pid, signal.SIGTERM)
                     time.sleep(0.5)
             except Exception:
                 pass
@@ -321,10 +434,22 @@ class ClementineLifecycleManager:
             logger.info("Browser opening disabled by configuration.")
             return False
 
-        # Check if an existing browser window launched by us is still alive
+        # Check if an existing browser window launched by us or recorded in PID file is alive
         if self.browser_proc and self.browser_proc.poll() is None:
             logger.info("Dedicated browser window (PID %d) is already open.", self.browser_proc.pid)
             return True
+
+        if BROWSER_PID_FILE.is_file():
+            try:
+                rec_pid = int(BROWSER_PID_FILE.read_text().strip())
+                if rec_pid > 0:
+                    os.kill(rec_pid, 0)
+                    logger.info("Dedicated browser window (PID %d from file) is already active.", rec_pid)
+                    return True
+            except (ProcessLookupError, ValueError):
+                BROWSER_PID_FILE.unlink(missing_ok=True)
+            except Exception:
+                pass
 
         browser_bin, b_type = find_browser()
         if not browser_bin:
@@ -335,17 +460,22 @@ class ClementineLifecycleManager:
         ensure_environment()
 
         if b_type == "chromium":
-            # App mode in dedicated user-data-dir gives a clean, frameless, native-app feel
-            # and isolates its process tree so we can terminate it without closing user tabs
+            # Suppress crash recovery popup banners and isolate profile
+            clean_browser_profile_state(BROWSER_PROFILE_DIR)
             cmd = [
                 browser_bin,
-                f"--app={target_url}",
                 f"--user-data-dir={BROWSER_PROFILE_DIR}",
                 "--class=clementine-web-remote",
                 "--app-id=clementine-web-remote",
                 "--no-first-run",
                 "--no-default-browser-check",
+                "--disable-session-crashed-bubble",
+                "--disable-infobars",
             ]
+            if self.app_mode:
+                cmd.append(f"--app={target_url}")
+            else:
+                cmd.extend(["--new-window", target_url])
         elif b_type == "firefox":
             cmd = [browser_bin, "--new-window", target_url]
         else:
@@ -388,7 +518,11 @@ class ClementineLifecycleManager:
             try:
                 pid = int(BROWSER_PID_FILE.read_text().strip())
                 if pid > 0 and pid != os.getpid():
-                    os.kill(pid, signal.SIGTERM)
+                    try:
+                        pgid = os.getpgid(pid)
+                        os.killpg(pgid, signal.SIGTERM)
+                    except Exception:
+                        os.kill(pid, signal.SIGTERM)
             except Exception:
                 pass
             try:
@@ -403,9 +537,12 @@ class ClementineLifecycleManager:
         except Exception:
             pass
 
+        # 4. Clean exit state in profile to avoid crash prompts on next launch
+        clean_browser_profile_state(BROWSER_PROFILE_DIR)
+
         logger.info("Web Remote browser closed.")
 
-    def on_clementine_opened(self) -> None:
+    def on_clementine_opened(self, verify_clementine: bool = False) -> None:
         """Handle Clementine opening event."""
         if self.is_active:
             return
@@ -415,6 +552,13 @@ class ClementineLifecycleManager:
 
         # 1. Start Server
         self.start_server()
+
+        # Check if Clementine was killed/exited while server was starting (if requested)
+        if verify_clementine and not is_clementine_running():
+            logger.info("Clementine exited while server was starting. Aborting activation.")
+            self.stop_server()
+            self.is_active = False
+            return
 
         # 2. Retrieve iPhone URL from system info
         info = get_system_info(self.port)
@@ -432,9 +576,13 @@ class ClementineLifecycleManager:
         notification_body = f"Clementine açıldı, Web Remote aktif!\niPhone URL: {iphone_url}"
         send_notification(notification_title, notification_body)
 
-    def on_clementine_closed(self) -> None:
+    def on_clementine_closed(self, force: bool = False) -> None:
         """Handle Clementine closing event."""
-        if not self.is_active:
+        srv_running = is_port_open(self.port) or SERVER_PID_FILE.is_file()
+        browser_active = (self.browser_proc and self.browser_proc.poll() is None) or BROWSER_PID_FILE.is_file()
+
+        # If not active and not force and nothing running, no teardown needed
+        if not self.is_active and not force and not srv_running and not browser_active:
             return
 
         logger.info(">>> Event: Clementine closed! Deactivating Web Remote...")
@@ -455,7 +603,7 @@ class ClementineLifecycleManager:
         """Synchronize active state with Clementine process state."""
         running = is_clementine_running()
         if running and not self.is_active:
-            self.on_clementine_opened()
+            self.on_clementine_opened(verify_clementine=True)
         elif not running and self.is_active:
             self.on_clementine_closed()
 
@@ -464,17 +612,62 @@ class ClementineLifecycleManager:
         clem_pid = get_clementine_pid()
         srv_running = is_port_open(self.port)
         info = get_system_info(self.port) if srv_running else None
-        browser_running = (self.browser_proc and self.browser_proc.poll() is None)
+
+        # Determine actual server PID
+        server_pid = None
+        if self.server_proc and self.server_proc.poll() is None:
+            server_pid = self.server_proc.pid
+        elif SERVER_PID_FILE.is_file():
+            try:
+                pid = int(SERVER_PID_FILE.read_text().strip())
+                if pid > 0:
+                    os.kill(pid, 0)
+                    server_pid = pid
+            except Exception:
+                pass
+
+        # Determine actual browser running state & PID
+        browser_running = False
+        browser_pid = None
+        if self.browser_proc and self.browser_proc.poll() is None:
+            browser_running = True
+            browser_pid = self.browser_proc.pid
+        elif BROWSER_PID_FILE.is_file():
+            try:
+                pid = int(BROWSER_PID_FILE.read_text().strip())
+                if pid > 0:
+                    os.kill(pid, 0)
+                    browser_running = True
+                    browser_pid = pid
+            except Exception:
+                pass
+
+        # Determine daemon running state & PID
+        daemon_running = False
+        daemon_pid = None
+        if WATCHER_PID_FILE.is_file():
+            try:
+                pid = int(WATCHER_PID_FILE.read_text().strip())
+                if pid > 0:
+                    os.kill(pid, 0)
+                    daemon_running = True
+                    daemon_pid = pid
+            except Exception:
+                pass
 
         return {
             "clementine_running": clem_pid is not None,
             "clementine_pid": clem_pid,
             "server_running": srv_running,
+            "server_pid": server_pid,
             "server_port": self.port,
             "server_info": info,
             "browser_running": browser_running,
+            "browser_pid": browser_pid,
             "browser_profile": str(BROWSER_PROFILE_DIR),
-            "watcher_active_state": self.is_active,
+            "watcher_daemon_running": daemon_running,
+            "watcher_daemon_pid": daemon_pid,
+            "watcher_active_state": self.is_active or (clem_pid is not None and srv_running),
         }
 
 
@@ -499,7 +692,7 @@ def run_daemon(manager: ClementineLifecycleManager) -> None:
             if name == "org.mpris.MediaPlayer2.clementine":
                 if new_owner and not old_owner:
                     logger.info("D-Bus event: Clementine registered on session bus.")
-                    manager.on_clementine_opened()
+                    manager.on_clementine_opened(verify_clementine=True)
                 elif old_owner and not new_owner:
                     logger.info("D-Bus event: Clementine released session bus.")
                     manager.on_clementine_closed()
@@ -509,7 +702,7 @@ def run_daemon(manager: ClementineLifecycleManager) -> None:
             "org.freedesktop.DBus",
             "NameOwnerChanged",
             "/org/freedesktop/DBus",
-            None,
+            "org.mpris.MediaPlayer2.clementine",  # arg0 filter: only wake on Clementine!
             Gio.DBusSignalFlags.NONE,
             on_name_owner_changed,
             None,
@@ -579,7 +772,8 @@ def main() -> None:
     parser.add_argument("--port", type=int, default=None, help="Custom server port (default: 8000)")
     args = parser.parse_args()
 
-    manager = ClementineLifecycleManager(port=args.port, enable_browser=not args.no_browser)
+    enable_browser = False if args.no_browser else None
+    manager = ClementineLifecycleManager(port=args.port, enable_browser=enable_browser)
 
     if args.status:
         st = manager.get_status()
@@ -591,7 +785,7 @@ def main() -> None:
         sys.exit(0)
 
     if args.stop:
-        manager.on_clementine_closed()
+        manager.on_clementine_closed(force=True)
         sys.exit(0)
 
     if args.oneshot:
