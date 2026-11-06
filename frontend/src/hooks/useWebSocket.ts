@@ -1,0 +1,77 @@
+import { useState, useEffect, useRef, useCallback } from 'react';
+
+type MessageHandler = (event: string, data: any) => void;
+
+export function useWebSocket(onMessage: MessageHandler) {
+  const [isConnected, setIsConnected] = useState<boolean>(false);
+  const [isReconnecting, setIsReconnecting] = useState<boolean>(false);
+  const socketRef = useRef<WebSocket | null>(null);
+  const reconnectTimeoutRef = useRef<number | null>(null);
+  const backoffRef = useRef<number>(1000);
+
+  const connect = useCallback(() => {
+    if (socketRef.current && (socketRef.current.readyState === WebSocket.OPEN || socketRef.current.readyState === WebSocket.CONNECTING)) {
+      return;
+    }
+
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const host = window.location.host;
+    const wsUrl = `${protocol}//${host}/ws`;
+
+    try {
+      const ws = new WebSocket(wsUrl);
+      socketRef.current = ws;
+
+      ws.onopen = () => {
+        setIsConnected(true);
+        setIsReconnecting(false);
+        backoffRef.current = 1000;
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const payload = JSON.parse(event.data);
+          if (payload.event && payload.event !== 'ping' && payload.event !== 'pong') {
+            onMessage(payload.event, payload.data);
+          }
+        } catch (e) {
+          console.error("WS parse error", e);
+        }
+      };
+
+      ws.onclose = () => {
+        setIsConnected(false);
+        setIsReconnecting(true);
+        socketRef.current = null;
+
+        // Auto reconnect with exponential backoff
+        const timeout = backoffRef.current;
+        backoffRef.current = Math.min(backoffRef.current * 1.5, 8000);
+        reconnectTimeoutRef.current = window.setTimeout(() => {
+          connect();
+        }, timeout);
+      };
+
+      ws.onerror = () => {
+        ws.close();
+      };
+    } catch (e) {
+      setIsReconnecting(true);
+    }
+  }, [onMessage]);
+
+  useEffect(() => {
+    connect();
+
+    return () => {
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
+      }
+      if (socketRef.current) {
+        socketRef.current.close();
+      }
+    };
+  }, [connect]);
+
+  return { isConnected, isReconnecting };
+}

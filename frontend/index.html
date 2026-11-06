@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <title>Clementine Web Remote</title>
+    
+    <!-- PWA & Apple Safari Meta Tags -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Clementine" />
+    <meta name="theme-color" content="#0c0d10" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="icon" type="image/svg+xml" href="/icons/clementine-icon.svg" />
+    <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+  </head>
+  <body class="bg-hifi-900 text-slate-100 antialiased overflow-x-hidden selection:bg-hifi-accent selection:text-black">
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
