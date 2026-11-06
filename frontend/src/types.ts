@@ -50,6 +50,7 @@ export interface AlbumItem {
   year?: string;
   track_count: number;
   art_available: boolean;
+  sample_track_url?: string;
 }
 
 export interface SearchResults {

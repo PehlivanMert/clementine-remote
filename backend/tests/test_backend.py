@@ -1,9 +1,11 @@
 import pytest
+from starlette.websockets import WebSocketDisconnect
 from fastapi.testclient import TestClient
 from backend.app.main import app
 from backend.app.adapters.clementine.protocol import pack_message, AsyncMessageParser
 from backend.app.adapters.clementine import remotecontrolmessages_pb2 as pb
-from backend.app.config import settings
+from backend.app.config import settings, detect_lan_ip
+from backend.app.security import login_rate_limiter, create_access_token
 
 client = TestClient(app)
 
@@ -26,8 +28,20 @@ def test_system_info():
     assert "lan_ip" in data
     assert "clementine_connected" in data
     assert data["server_port"] == settings.SERVER_PORT
+    assert not data["lan_ip"].startswith("172.16.0.")  # Must not be CloudflareWARP VPN!
+
+def test_lan_ip_detection():
+    ip = detect_lan_ip()
+    assert ip is not None
+    assert not ip.startswith("127.")
+    assert not ip.startswith("172.16.0.")  # Not VPN
+    assert not ip.startswith("172.17.")    # Not Docker
+    assert not ip.startswith("172.18.")    # Not Docker bridge
 
 def test_auth_flow():
+    # Reset limiter for test
+    login_rate_limiter.reset("testclient")
+
     # 1. Status without auth
     res = client.get("/api/auth/status")
     assert res.status_code == 200
@@ -63,6 +77,35 @@ def test_auth_flow():
     assert res.status_code == 200
     search_data = res.json()
     assert "tracks" in search_data
+
+def test_login_rate_limiting():
+    fake_ip = "192.168.1.100"
+    login_rate_limiter.reset(fake_ip)
+
+    # Record 5 failed attempts
+    for _ in range(5):
+        login_rate_limiter.record_failed_attempt(fake_ip)
+
+    assert login_rate_limiter.is_rate_limited(fake_ip) is True
+    login_rate_limiter.reset(fake_ip)
+    assert login_rate_limiter.is_rate_limited(fake_ip) is False
+
+def test_websocket_unauthenticated_rejection():
+    # Fresh unauthenticated client without session cookies
+    unauth_client = TestClient(app)
+    unauth_client.cookies.clear()
+    with pytest.raises(WebSocketDisconnect) as exc_info:
+        with unauth_client.websocket_connect("/ws") as ws:
+            ws.receive_text()
+    assert exc_info.value.code == 1008
+
+def test_websocket_authenticated_acceptance():
+    token = create_access_token({"sub": "test_user"})
+    with client.websocket_connect(f"/ws?token={token}") as ws:
+        data = ws.receive_json()
+        assert data["event"] == "initial_state"
+        assert "status" in data["data"]
+
 def test_spa_serving():
     res = client.get("/")
     assert res.status_code == 200

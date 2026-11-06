@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Play,
   Pause,
@@ -8,7 +8,10 @@ import {
   Repeat,
   Volume2,
   VolumeX,
+  Volume1,
   Music,
+  Plus,
+  Minus,
 } from 'lucide-react';
 import { PlayerStatus } from '../types';
 import { api } from '../api';
@@ -22,11 +25,20 @@ export const NowPlaying: React.FC<NowPlayingProps> = ({ status }) => {
   const [seeking, setSeeking] = useState(false);
   const [seekVal, setSeekVal] = useState(0);
   const [artCacheBuster, setArtCacheBuster] = useState(Date.now());
+  const lastUnmutedVolume = useRef<number>(75);
+  const seekLockTimer = useRef<number | null>(null);
 
   const currentTrack = status?.current_track;
   const isPlaying = status?.state === 'Playing';
   const duration = status?.duration || currentTrack?.length || 0;
   const currentPos = seeking ? seekVal : (status?.position || 0);
+
+  // Track last unmuted volume
+  useEffect(() => {
+    if (status?.volume && status.volume > 0) {
+      lastUnmutedVolume.current = status.volume;
+    }
+  }, [status?.volume]);
 
   // Update art when track changes
   useEffect(() => {
@@ -40,8 +52,13 @@ export const NowPlaying: React.FC<NowPlayingProps> = ({ status }) => {
   };
 
   const handleSeekCommit = async () => {
-    setSeeking(false);
-    await api.seek(seekVal);
+    const targetSeek = seekVal;
+    await api.seek(targetSeek);
+    // Keep lock active briefly to prevent UI snap-back before socket syncs
+    if (seekLockTimer.current) clearTimeout(seekLockTimer.current);
+    seekLockTimer.current = window.setTimeout(() => {
+      setSeeking(false);
+    }, 600);
   };
 
   const handleVolumeChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -49,9 +66,20 @@ export const NowPlaying: React.FC<NowPlayingProps> = ({ status }) => {
     await api.setVolume(val);
   };
 
+  const handleVolumeStep = async (step: number) => {
+    const cur = status?.volume ?? 50;
+    const nextVol = Math.max(0, Math.min(100, cur + step));
+    await api.setVolume(nextVol);
+  };
+
   const toggleMute = async () => {
-    const newVol = (status?.volume || 0) > 0 ? 0 : 75;
-    await api.setVolume(newVol);
+    const currentVol = status?.volume || 0;
+    if (currentVol > 0) {
+      lastUnmutedVolume.current = currentVol;
+      await api.setVolume(0);
+    } else {
+      await api.setVolume(lastUnmutedVolume.current || 75);
+    }
   };
 
   const cycleShuffle = async () => {
@@ -115,12 +143,12 @@ export const NowPlaying: React.FC<NowPlayingProps> = ({ status }) => {
           min={0}
           max={duration || 100}
           value={currentPos}
+          onPointerDown={() => setSeeking(true)}
           onChange={(e) => {
             setSeeking(true);
             setSeekVal(parseInt(e.target.value, 10));
           }}
-          onMouseUp={handleSeekCommit}
-          onTouchEnd={handleSeekCommit}
+          onPointerUp={handleSeekCommit}
           className="w-full"
         />
         <div className="flex justify-between text-[11px] font-mono text-neutral-400 mt-1">
@@ -134,12 +162,13 @@ export const NowPlaying: React.FC<NowPlayingProps> = ({ status }) => {
         {/* Shuffle */}
         <button
           onClick={cycleShuffle}
-          className={`p-2 rounded-full transition ${
+          className={`p-2.5 rounded-full transition ${
             (status?.shuffle_mode || 0) > 0
               ? 'text-amber-500 bg-amber-500/10'
               : 'text-neutral-400 hover:text-white'
           }`}
           title="Shuffle"
+          aria-label="Toggle shuffle"
         >
           <Shuffle className="w-5 h-5" />
         </button>
@@ -147,8 +176,9 @@ export const NowPlaying: React.FC<NowPlayingProps> = ({ status }) => {
         {/* Previous */}
         <button
           onClick={() => api.previous()}
-          className="p-3 rounded-full text-neutral-200 hover:text-white hover:bg-white/5 active:scale-95 transition"
+          className="p-3.5 rounded-full text-neutral-200 hover:text-white hover:bg-white/5 active:scale-95 transition"
           title="Previous"
+          aria-label="Previous track"
         >
           <SkipBack className="w-6 h-6 fill-current" />
         </button>
@@ -158,6 +188,7 @@ export const NowPlaying: React.FC<NowPlayingProps> = ({ status }) => {
           onClick={() => api.playPause()}
           className="w-16 h-16 rounded-full bg-gradient-to-tr from-amber-500 to-orange-500 text-black flex items-center justify-center shadow-lg shadow-amber-500/25 active:scale-95 hover:scale-105 transition"
           title={isPlaying ? 'Pause' : 'Play'}
+          aria-label={isPlaying ? 'Pause playback' : 'Start playback'}
         >
           {isPlaying ? (
             <Pause className="w-7 h-7 fill-black stroke-black" />
@@ -169,8 +200,9 @@ export const NowPlaying: React.FC<NowPlayingProps> = ({ status }) => {
         {/* Next */}
         <button
           onClick={() => api.next()}
-          className="p-3 rounded-full text-neutral-200 hover:text-white hover:bg-white/5 active:scale-95 transition"
+          className="p-3.5 rounded-full text-neutral-200 hover:text-white hover:bg-white/5 active:scale-95 transition"
           title="Next"
+          aria-label="Next track"
         >
           <SkipForward className="w-6 h-6 fill-current" />
         </button>
@@ -178,12 +210,13 @@ export const NowPlaying: React.FC<NowPlayingProps> = ({ status }) => {
         {/* Repeat */}
         <button
           onClick={cycleRepeat}
-          className={`p-2 rounded-full transition relative ${
+          className={`p-2.5 rounded-full transition relative ${
             (status?.repeat_mode || 0) > 0
               ? 'text-amber-500 bg-amber-500/10'
               : 'text-neutral-400 hover:text-white'
           }`}
           title="Repeat"
+          aria-label="Toggle repeat"
         >
           <Repeat className="w-5 h-5" />
           {status?.repeat_mode === 1 && (
@@ -192,15 +225,32 @@ export const NowPlaying: React.FC<NowPlayingProps> = ({ status }) => {
         </button>
       </div>
 
-      {/* Volume Slider Bar */}
-      <div className="w-full flex items-center space-x-3 px-3 py-2 rounded-xl bg-white/[0.03] border border-white/5">
-        <button onClick={toggleMute} className="text-neutral-400 hover:text-white transition">
+      {/* Volume Bar with Step Controls & Slider */}
+      <div className="w-full flex items-center space-x-2 px-3 py-2 rounded-xl bg-white/[0.03] border border-white/5">
+        <button
+          onClick={toggleMute}
+          className="p-1.5 rounded-lg text-neutral-400 hover:text-white hover:bg-white/5 transition"
+          title={status?.volume === 0 ? "Unmute" : "Mute"}
+          aria-label={status?.volume === 0 ? "Unmute" : "Mute"}
+        >
           {(status?.volume || 0) === 0 ? (
             <VolumeX className="w-4 h-4 text-rose-400" />
+          ) : (status?.volume || 0) < 50 ? (
+            <Volume1 className="w-4 h-4 text-neutral-300" />
           ) : (
-            <Volume2 className="w-4 h-4" />
+            <Volume2 className="w-4 h-4 text-neutral-300" />
           )}
         </button>
+
+        <button
+          onClick={() => handleVolumeStep(-5)}
+          className="p-1.5 rounded-lg text-neutral-400 hover:text-white hover:bg-white/5 active:scale-90 transition"
+          title="Volume Down"
+          aria-label="Decrease volume by 5%"
+        >
+          <Minus className="w-3.5 h-3.5" />
+        </button>
+
         <input
           type="range"
           min={0}
@@ -208,7 +258,18 @@ export const NowPlaying: React.FC<NowPlayingProps> = ({ status }) => {
           value={status?.volume || 0}
           onChange={handleVolumeChange}
           className="flex-1 accent-amber-500 h-1.5"
+          aria-label="Volume slider"
         />
+
+        <button
+          onClick={() => handleVolumeStep(5)}
+          className="p-1.5 rounded-lg text-neutral-400 hover:text-white hover:bg-white/5 active:scale-90 transition"
+          title="Volume Up"
+          aria-label="Increase volume by 5%"
+        >
+          <Plus className="w-3.5 h-3.5" />
+        </button>
+
         <span className="text-xs font-mono text-neutral-400 w-8 text-right">
           {status?.volume || 0}%
         </span>

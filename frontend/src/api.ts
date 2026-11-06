@@ -166,6 +166,15 @@ export const api = {
     return handleResponse(res);
   },
 
+  clearPlaylist: async (playlistId?: number) => {
+    const res = await fetch('/api/playlist/clear', {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify({ playlist_id: playlistId }),
+    });
+    return handleResponse(res);
+  },
+
   // Library
   getArtists: async (): Promise<ArtistItem[]> => {
     const res = await fetch('/api/library/artists', { headers: getHeaders() });

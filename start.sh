@@ -17,11 +17,8 @@ if ! ss -tlpn 2>/dev/null | grep -q ":5500"; then
     echo "    Please verify that Network Remote Control is enabled in Clementine Preferences."
 fi
 
-# 3. Detect LAN IP
-LAN_IP=$(ip -4 addr show wlo1 2>/dev/null | grep -oP '(?<=inet\s)\d+(\.\d+){3}' || true)
-if [ -z "$LAN_IP" ]; then
-    LAN_IP=$(hostname -I | awk '{print $1}')
-fi
+# 3. Detect LAN IP (consistent with backend config)
+LAN_IP=$(backend/venv/bin/python3 -c "from backend.app.config import settings; print(settings.LAN_IP)" 2>/dev/null || ip -4 addr show wlo1 2>/dev/null | grep -oP '(?<=inet\s)\d+(\.\d+){3}' || echo "172.20.5.94")
 
 PORT=8000
 echo "=========================================================="

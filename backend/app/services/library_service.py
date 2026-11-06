@@ -185,8 +185,11 @@ class LibraryService:
                 "artist": art,
                 "year": track.year,
                 "track_count": 0,
-                "art_available": True
+                "art_available": True,
+                "sample_track_url": track.url or ""
             }
+        elif not self._albums[album_key].get("sample_track_url") and track.url:
+            self._albums[album_key]["sample_track_url"] = track.url
         self._albums[album_key]["track_count"] += 1
 
     def get_artists(self) -> List[ArtistItem]:
@@ -211,7 +214,8 @@ class LibraryService:
                 artist=v["artist"],
                 year=v["year"],
                 track_count=v["track_count"],
-                art_available=v["art_available"]
+                art_available=v["art_available"],
+                sample_track_url=v.get("sample_track_url", "")
             ))
         return sorted(res, key=lambda x: (x.artist.lower(), x.name.lower()))
 

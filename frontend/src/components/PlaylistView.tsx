@@ -1,5 +1,5 @@
-import React from 'react';
-import { Play, Trash2, Disc } from 'lucide-react';
+import React, { useState } from 'react';
+import { Play, Trash2, Disc, AlertTriangle } from 'lucide-react';
 import { TrackMetadata, PlaylistInfo, PlayerStatus } from '../types';
 import { api } from '../api';
 
@@ -11,18 +11,33 @@ interface PlaylistViewProps {
 }
 
 export const PlaylistView: React.FC<PlaylistViewProps> = ({ playlist, songs, status }) => {
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
+  const [isClearing, setIsClearing] = useState(false);
+
   const currentTrackIndex = status?.current_track?.index;
   const isPlaying = status?.state === 'Playing';
 
   const handlePlaySong = async (index: number) => {
-    if (!playlist) return;
-    await api.changeSong(playlist.id, index);
+    const targetPlId = playlist?.id ?? 1;
+    await api.changeSong(targetPlId, index);
   };
 
   const handleRemoveSong = async (e: React.MouseEvent, index: number) => {
     e.stopPropagation();
-    if (!playlist) return;
-    await api.removeSongs(playlist.id, [index]);
+    const targetPlId = playlist?.id ?? 1;
+    await api.removeSongs(targetPlId, [index]);
+  };
+
+  const handleClearPlaylist = async () => {
+    setIsClearing(true);
+    try {
+      await api.clearPlaylist(playlist?.id);
+      setShowClearConfirm(false);
+    } catch (err) {
+      console.error("Failed to clear playlist", err);
+    } finally {
+      setIsClearing(false);
+    }
   };
 
   return (
@@ -37,6 +52,17 @@ export const PlaylistView: React.FC<PlaylistViewProps> = ({ playlist, songs, sta
             {songs.length} {songs.length === 1 ? 'track' : 'tracks'}
           </p>
         </div>
+
+        {songs.length > 0 && (
+          <button
+            onClick={() => setShowClearConfirm(true)}
+            className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-rose-400 hover:text-rose-300 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 active:scale-95 transition"
+            title="Clear Queue"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+            <span>Clear Queue</span>
+          </button>
+        )}
       </div>
 
       {/* Song List */}
@@ -50,6 +76,10 @@ export const PlaylistView: React.FC<PlaylistViewProps> = ({ playlist, songs, sta
         <div className="space-y-1.5 pb-20">
           {songs.map((song) => {
             const isCurrent = currentTrackIndex === song.index;
+            const artSrc = (song.filename || song.url)
+              ? `/api/artwork/file?path=${encodeURIComponent(song.url || song.filename || '')}&thumb=true`
+              : null;
+
             return (
               <div
                 key={`${song.index}-${song.title}`}
@@ -60,25 +90,35 @@ export const PlaylistView: React.FC<PlaylistViewProps> = ({ playlist, songs, sta
                     : 'bg-white/[0.02] border-white/5 hover:bg-white/[0.06] text-neutral-300'
                 }`}
               >
-                {/* Track Index / Equalizer Icon */}
+                {/* Track Thumbnail & Equalizer */}
                 <div className="flex items-center space-x-3 min-w-0 flex-1">
-                  <div className="w-8 h-8 rounded-lg bg-hifi-800 flex items-center justify-center flex-shrink-0 text-xs font-mono">
+                  <div className="relative w-10 h-10 rounded-lg bg-hifi-800 border border-white/10 flex items-center justify-center flex-shrink-0 overflow-hidden">
+                    {artSrc ? (
+                      <img
+                        src={artSrc}
+                        alt=""
+                        className="w-full h-full object-cover"
+                        loading="lazy"
+                        onError={(e) => {
+                          (e.target as HTMLElement).style.display = 'none';
+                        }}
+                      />
+                    ) : (
+                      <Disc className="w-5 h-5 text-neutral-600" />
+                    )}
+
+                    {/* Overlay badge for current playing track */}
                     {isCurrent && isPlaying ? (
-                      <div className="flex items-end space-x-0.5 h-3">
-                        <span className="w-0.5 h-3 bg-amber-500 animate-pulse"></span>
-                        <span className="w-0.5 h-2 bg-amber-500 animate-pulse delay-75"></span>
-                        <span className="w-0.5 h-3.5 bg-amber-500 animate-pulse delay-150"></span>
+                      <div className="absolute inset-0 bg-black/60 flex items-end justify-center pb-2 space-x-0.5">
+                        <span className="w-0.5 h-3 bg-amber-400 animate-pulse"></span>
+                        <span className="w-0.5 h-2 bg-amber-400 animate-pulse delay-75"></span>
+                        <span className="w-0.5 h-3.5 bg-amber-400 animate-pulse delay-150"></span>
                       </div>
                     ) : isCurrent ? (
-                      <Play className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
-                    ) : (
-                      <span className="text-neutral-400 group-hover:hidden">
-                        {song.index + 1}
-                      </span>
-                    )}
-                    {!isCurrent && (
-                      <Play className="w-3.5 h-3.5 text-neutral-400 hidden group-hover:block" />
-                    )}
+                      <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
+                        <Play className="w-4 h-4 text-amber-400 fill-amber-400" />
+                      </div>
+                    ) : null}
                   </div>
 
                   {/* Title & Artist */}
@@ -92,15 +132,16 @@ export const PlaylistView: React.FC<PlaylistViewProps> = ({ playlist, songs, sta
                   </div>
                 </div>
 
-                {/* Duration & Actions */}
-                <div className="flex items-center space-x-3 flex-shrink-0">
+                {/* Duration & Touch-Accessible Delete Button */}
+                <div className="flex items-center space-x-2 flex-shrink-0">
                   <span className="text-xs font-mono text-neutral-400">
                     {song.pretty_length}
                   </span>
                   <button
                     onClick={(e) => handleRemoveSong(e, song.index)}
-                    className="p-1.5 rounded-lg text-neutral-400 hover:text-rose-400 hover:bg-rose-500/10 transition opacity-0 group-hover:opacity-100"
+                    className="p-2 rounded-lg text-neutral-400 hover:text-rose-400 hover:bg-rose-500/10 active:scale-90 transition opacity-80 group-hover:opacity-100"
                     title="Remove from queue"
+                    aria-label={`Remove ${song.title} from queue`}
                   >
                     <Trash2 className="w-4 h-4" />
                   </button>
@@ -108,6 +149,41 @@ export const PlaylistView: React.FC<PlaylistViewProps> = ({ playlist, songs, sta
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* Confirmation Modal for Clear Playlist */}
+      {showClearConfirm && (
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-hifi-800 border border-white/10 rounded-2xl p-5 max-w-sm w-full shadow-2xl text-center space-y-4">
+            <div className="w-12 h-12 rounded-full bg-rose-500/10 border border-rose-500/20 text-rose-400 mx-auto flex items-center justify-center">
+              <AlertTriangle className="w-6 h-6" />
+            </div>
+
+            <div className="space-y-1">
+              <h3 className="text-base font-bold text-white">Clear Queue?</h3>
+              <p className="text-xs text-neutral-400">
+                Are you sure you want to remove all {songs.length} tracks from '{playlist?.name || 'Now Playing Queue'}'?
+              </p>
+            </div>
+
+            <div className="flex space-x-3 pt-2">
+              <button
+                onClick={() => setShowClearConfirm(false)}
+                className="flex-1 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-neutral-300 text-xs font-semibold transition"
+                disabled={isClearing}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleClearPlaylist}
+                className="flex-1 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold shadow-lg shadow-rose-600/30 transition disabled:opacity-50"
+                disabled={isClearing}
+              >
+                {isClearing ? 'Clearing...' : 'Clear Queue'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

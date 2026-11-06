@@ -128,10 +128,10 @@ export const App: React.FC = () => {
           />
         )}
         {currentTab === 'library' && (
-          <LibraryView />
+          <LibraryView activePlaylistId={activePlaylist?.id} />
         )}
         {currentTab === 'search' && (
-          <SearchView />
+          <SearchView activePlaylistId={activePlaylist?.id} />
         )}
         {currentTab === 'system' && (
           <SystemView

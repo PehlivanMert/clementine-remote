@@ -1,13 +1,14 @@
 import os
 import asyncio
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 
 from .config import settings
 from .logging_config import setup_logging, logger
+from .security import verify_token_string
 from .adapters.clementine.client import clementine_client
 from .services.library_service import library_service
 from .websocket.manager import manager
@@ -57,9 +58,16 @@ app.include_router(library.router)
 app.include_router(artwork.router)
 app.include_router(system.router)
 
-# WebSocket Endpoint
+# Secure WebSocket Endpoint
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
+    # Verify authentication from cookie or query param
+    token = websocket.cookies.get("token") or websocket.query_params.get("token")
+    if not verify_token_string(token):
+        logger.warning(f"Unauthorized WebSocket connection attempt rejected from {websocket.client}")
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+        return
+
     await manager.connect(websocket)
     try:
         while True:

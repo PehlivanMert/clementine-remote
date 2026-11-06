@@ -1,6 +1,6 @@
-from fastapi import APIRouter, Response, Depends, HTTPException, status
+from fastapi import APIRouter, Response, Request, Depends, HTTPException, status
 from pydantic import BaseModel
-from ..security import verify_password, create_access_token, get_current_user_optional
+from ..security import verify_password, create_access_token, get_current_user_optional, login_rate_limiter
 from ..config import settings
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
@@ -13,12 +13,26 @@ class LoginResponse(BaseModel):
     token: str
 
 @router.post("/login", response_model=LoginResponse)
-async def login(req: LoginRequest, response: Response):
+async def login(req: LoginRequest, request: Request, response: Response):
+    client_ip = request.client.host if request.client else "unknown"
+
+    # Check rate limit (max 5 failed attempts per minute)
+    if login_rate_limiter.is_rate_limited(client_ip):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many failed login attempts. Please wait 60 seconds before trying again.",
+            headers={"Retry-After": "60"}
+        )
+
     if not verify_password(req.password, settings.WEB_PASSWORD):
+        login_rate_limiter.record_failed_attempt(client_ip)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect password"
         )
+
+    # Login successful - reset failed attempts
+    login_rate_limiter.reset(client_ip)
 
     token = create_access_token({"sub": "remote_user"})
     response.set_cookie(

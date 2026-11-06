@@ -3,7 +3,11 @@ import { User, Disc, Play, Plus, ChevronRight, ArrowLeft } from 'lucide-react';
 import { ArtistItem, AlbumItem, TrackMetadata } from '../types';
 import { api } from '../api';
 
-export const LibraryView: React.FC = () => {
+interface LibraryViewProps {
+  activePlaylistId?: number;
+}
+
+export const LibraryView: React.FC<LibraryViewProps> = ({ activePlaylistId = 1 }) => {
   const [subTab, setSubTab] = useState<'artists' | 'albums' | 'tracks'>('albums');
   const [artists, setArtists] = useState<ArtistItem[]>([]);
   const [albums, setAlbums] = useState<AlbumItem[]>([]);
@@ -50,29 +54,31 @@ export const LibraryView: React.FC = () => {
 
   const handlePlayTrack = async (track: TrackMetadata) => {
     if (!track.url) return;
-    await api.insertUrls(1, [track.url], true, false);
+    await api.insertUrls(activePlaylistId, [track.url], true, false);
   };
 
   const handleEnqueueTrack = async (e: React.MouseEvent, track: TrackMetadata) => {
     e.stopPropagation();
     if (!track.url) return;
-    await api.insertUrls(1, [track.url], false, true);
+    await api.insertUrls(activePlaylistId, [track.url], false, true);
   };
 
   const handlePlayAlbumAll = async () => {
     if (!albumTracks.length) return;
     const urls = albumTracks.map((t) => t.url).filter(Boolean) as string[];
-    await api.insertUrls(1, urls, true, false);
+    await api.insertUrls(activePlaylistId, urls, true, false);
   };
 
   const handleEnqueueAlbumAll = async () => {
     if (!albumTracks.length) return;
     const urls = albumTracks.map((t) => t.url).filter(Boolean) as string[];
-    await api.insertUrls(1, urls, false, true);
+    await api.insertUrls(activePlaylistId, urls, false, true);
   };
 
   // If viewing an album detail drilldown
   if (selectedAlbum) {
+    const albumArtSrc = selectedAlbum.sample_track_url || albumTracks[0]?.url;
+
     return (
       <div className="max-w-md mx-auto px-4 py-4 min-h-[calc(100vh-8rem)] pb-24">
         <button
@@ -84,10 +90,10 @@ export const LibraryView: React.FC = () => {
         </button>
 
         <div className="flex space-x-4 mb-6">
-          <div className="w-24 h-24 rounded-xl bg-hifi-800 border border-white/10 overflow-hidden flex-shrink-0 flex items-center justify-center">
-            {albumTracks[0]?.url ? (
+          <div className="w-24 h-24 rounded-xl bg-hifi-800 border border-white/10 overflow-hidden flex-shrink-0 flex items-center justify-center relative shadow-lg">
+            {albumArtSrc ? (
               <img
-                src={`/api/artwork/file?path=${encodeURIComponent(albumTracks[0].url)}&thumb=true`}
+                src={`/api/artwork/file?path=${encodeURIComponent(albumArtSrc)}&thumb=true`}
                 alt={selectedAlbum.name}
                 className="w-full h-full object-cover"
                 onError={(e) => {
@@ -179,23 +185,42 @@ export const LibraryView: React.FC = () => {
         <div className="py-20 text-center text-neutral-400 text-xs">Loading library...</div>
       ) : subTab === 'albums' ? (
         <div className="grid grid-cols-2 gap-3">
-          {albums.map((album) => (
-            <div
-              key={`${album.artist}-${album.name}`}
-              onClick={() => handleSelectAlbum(album)}
-              className="group p-2.5 rounded-2xl bg-white/[0.03] border border-white/5 hover:border-amber-500/30 hover:bg-white/[0.06] cursor-pointer transition flex flex-col"
-            >
-              <div className="w-full aspect-square rounded-xl bg-hifi-800 border border-white/10 overflow-hidden mb-2.5 flex items-center justify-center relative">
-                <Disc className="w-10 h-10 text-neutral-600" />
-                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition">
-                  <Play className="w-8 h-8 text-amber-500 fill-amber-500" />
+          {albums.map((album) => {
+            const coverSrc = album.sample_track_url
+              ? `/api/artwork/file?path=${encodeURIComponent(album.sample_track_url)}&thumb=true`
+              : null;
+
+            return (
+              <div
+                key={`${album.artist}-${album.name}`}
+                onClick={() => handleSelectAlbum(album)}
+                className="group p-2.5 rounded-2xl bg-white/[0.03] border border-white/5 hover:border-amber-500/30 hover:bg-white/[0.06] cursor-pointer transition flex flex-col"
+              >
+                <div className="w-full aspect-square rounded-xl bg-hifi-800 border border-white/10 overflow-hidden mb-2.5 flex items-center justify-center relative shadow-sm">
+                  {coverSrc ? (
+                    <img
+                      src={coverSrc}
+                      alt={album.name}
+                      className="w-full h-full object-cover transition duration-300 group-hover:scale-105"
+                      loading="lazy"
+                      onError={(e) => {
+                        (e.target as HTMLElement).style.display = 'none';
+                      }}
+                    />
+                  ) : null}
+
+                  <Disc className="w-10 h-10 text-neutral-600 absolute" />
+
+                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition">
+                    <Play className="w-8 h-8 text-amber-500 fill-amber-500" />
+                  </div>
                 </div>
+                <h3 className="text-sm font-semibold text-white truncate">{album.name}</h3>
+                <p className="text-xs text-amber-500/90 truncate mt-0.5">{album.artist}</p>
+                <p className="text-[10px] text-neutral-400 mt-1">{album.track_count} tracks</p>
               </div>
-              <h3 className="text-sm font-semibold text-white truncate">{album.name}</h3>
-              <p className="text-xs text-amber-500/90 truncate mt-0.5">{album.artist}</p>
-              <p className="text-[10px] text-neutral-400 mt-1">{album.track_count} tracks</p>
-            </div>
-          ))}
+            );
+          })}
         </div>
       ) : subTab === 'artists' ? (
         <div className="space-y-1.5">

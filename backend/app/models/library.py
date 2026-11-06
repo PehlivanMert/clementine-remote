@@ -13,6 +13,7 @@ class AlbumItem(BaseModel):
     year: Optional[str] = ""
     track_count: int = 0
     art_available: bool = False
+    sample_track_url: Optional[str] = ""
 
 class SearchResults(BaseModel):
     query: str

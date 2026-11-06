@@ -303,15 +303,17 @@ class ClementineClient:
         await self._send_message(msg)
 
     async def change_song(self, playlist_id: int, song_index: int):
+        target_pl = playlist_id if playlist_id > 0 else self.active_playlist_id
         msg = pb.Message(version=23, type=pb.CHANGE_SONG)
-        msg.request_change_song.playlist_id = playlist_id
+        msg.request_change_song.playlist_id = target_pl
         msg.request_change_song.song_index = song_index
         await self._send_message(msg)
 
     async def insert_urls(self, playlist_id: int, urls: List[str], position: int = -1, play_now: bool = False, enqueue: bool = False):
+        target_pl = playlist_id if playlist_id > 0 else self.active_playlist_id
         msg = pb.Message(version=23, type=pb.INSERT_URLS)
         req = msg.request_insert_urls
-        req.playlist_id = playlist_id
+        req.playlist_id = target_pl
         req.urls.extend(urls)
         req.position = position
         req.play_now = play_now
@@ -319,9 +321,38 @@ class ClementineClient:
         await self._send_message(msg)
 
     async def remove_songs(self, playlist_id: int, song_indices: List[int]):
+        target_pl = playlist_id if playlist_id > 0 else self.active_playlist_id
         msg = pb.Message(version=23, type=pb.REMOVE_SONGS)
-        msg.request_remove_songs.playlist_id = playlist_id
+        msg.request_remove_songs.playlist_id = target_pl
         msg.request_remove_songs.songs.extend(song_indices)
+        await self._send_message(msg)
+
+    async def clear_playlist(self, playlist_id: int):
+        """Clear all tracks from the specified playlist using RequestUpdatePlaylist."""
+        target_pl = playlist_id if playlist_id > 0 else self.active_playlist_id
+        msg = pb.Message(version=23, type=pb.UPDATE_PLAYLIST)
+        req = msg.request_update_playlist
+        req.playlist_id = target_pl
+        req.clear_playlist = True
+        await self._send_message(msg)
+
+        # Optimistically update internal state and notify clients
+        if target_pl in self.playlist_songs:
+            self.playlist_songs[target_pl] = []
+        if target_pl in self.playlists:
+            self.playlists[target_pl].item_count = 0
+        self._notify("playlist_songs_updated", {"playlist_id": target_pl, "songs": []})
+        self._notify("playlists_updated", list(self.playlists.values()))
+
+    async def update_playlist(self, playlist_id: int, new_name: Optional[str] = None, clear_playlist: bool = False):
+        target_pl = playlist_id if playlist_id > 0 else self.active_playlist_id
+        msg = pb.Message(version=23, type=pb.UPDATE_PLAYLIST)
+        req = msg.request_update_playlist
+        req.playlist_id = target_pl
+        if new_name:
+            req.new_playlist_name = new_name
+        if clear_playlist:
+            req.clear_playlist = True
         await self._send_message(msg)
 
     async def set_shuffle(self, mode: int):

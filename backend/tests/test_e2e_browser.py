@@ -12,7 +12,7 @@ def live_server():
     env = os.environ.copy()
     env["SERVER_PORT"] = str(SERVER_PORT)
     env["PYTHONPATH"] = "/home/mert/clementine-web-remote"
-    
+
     proc = subprocess.Popen(
         ["/home/mert/clementine-web-remote/backend/venv/bin/python3", "-m", "uvicorn", "backend.app.main:app", "--port", str(SERVER_PORT)],
         cwd="/home/mert/clementine-web-remote",
@@ -51,7 +51,13 @@ def test_iphone_safari_experience(live_server):
 
         # 3. Now Playing Screen
         page.screenshot(path="/home/mert/clementine-web-remote/screenshots/02_now_playing_iphone.png")
-        assert page.locator('text=Clementine').is_visible()
+        assert page.locator('text=Clementine').or_(page.locator('text=Ready to Play')).first.is_visible()
+
+        # Test Volume Controls
+        vol_up = page.locator('button[title="Volume Up"]')
+        if vol_up.is_visible():
+            vol_up.click()
+            page.wait_for_timeout(300)
 
         # 4. Tab Navigation: Queue
         page.click('text=Queue')
@@ -59,6 +65,17 @@ def test_iphone_safari_experience(live_server):
         page.screenshot(path="/home/mert/clementine-web-remote/screenshots/03_queue_iphone.png")
         # Check that queue shows track count or playlist items
         assert page.locator('text=tracks').or_(page.locator('text=track')).first.is_visible()
+
+        # Check Clear Queue confirmation flow if tracks exist
+        clear_btn = page.locator('button:has-text("Clear Queue")')
+        if clear_btn.is_visible():
+            clear_btn.click()
+            page.wait_for_timeout(400)
+            # Confirm modal is open
+            assert page.locator('text=Clear Queue?').is_visible()
+            # Click Cancel to preserve user playlist
+            page.click('button:has-text("Cancel")')
+            page.wait_for_timeout(300)
 
         # 5. Tab Navigation: Library
         page.click('text=Library')
@@ -84,5 +101,7 @@ def test_iphone_safari_experience(live_server):
         page.wait_for_timeout(500)
         page.screenshot(path="/home/mert/clementine-web-remote/screenshots/07_system_iphone.png")
         assert page.locator('text=iPhone Safari Access URL').is_visible()
+        # Verify detected LAN IP is displayed
+        assert page.locator('text=172.20.5.94').first.is_visible()
 
         browser.close()

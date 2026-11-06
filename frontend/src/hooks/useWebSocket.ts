@@ -16,7 +16,10 @@ export function useWebSocket(onMessage: MessageHandler) {
 
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const host = window.location.host;
-    const wsUrl = `${protocol}//${host}/ws`;
+    const token = localStorage.getItem('clementine_token');
+    const wsUrl = token
+      ? `${protocol}//${host}/ws?token=${encodeURIComponent(token)}`
+      : `${protocol}//${host}/ws`;
 
     try {
       const ws = new WebSocket(wsUrl);

@@ -3,7 +3,11 @@ import { Search, X, Plus, User, Disc, Music } from 'lucide-react';
 import { SearchResults, TrackMetadata } from '../types';
 import { api } from '../api';
 
-export const SearchView: React.FC = () => {
+interface SearchViewProps {
+  activePlaylistId?: number;
+}
+
+export const SearchView: React.FC<SearchViewProps> = ({ activePlaylistId = 1 }) => {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SearchResults | null>(null);
   const [loading, setLoading] = useState(false);
@@ -31,13 +35,13 @@ export const SearchView: React.FC = () => {
 
   const handlePlayTrack = async (track: TrackMetadata) => {
     if (!track.url) return;
-    await api.insertUrls(1, [track.url], true, false);
+    await api.insertUrls(activePlaylistId, [track.url], true, false);
   };
 
   const handleEnqueueTrack = async (e: React.MouseEvent, track: TrackMetadata) => {
     e.stopPropagation();
     if (!track.url) return;
-    await api.insertUrls(1, [track.url], false, true);
+    await api.insertUrls(activePlaylistId, [track.url], false, true);
   };
 
   return (
@@ -92,65 +96,107 @@ export const SearchView: React.FC = () => {
             <div>
               <h3 className="text-xs uppercase tracking-wider font-bold text-neutral-400 mb-2">Albums</h3>
               <div className="grid grid-cols-2 gap-2">
-                {results.albums.map((album) => (
-                  <div
-                    key={`${album.artist}-${album.name}`}
-                    className="p-2 rounded-xl bg-white/[0.02] border border-white/5 flex items-center space-x-2.5"
-                  >
-                    <Disc className="w-7 h-7 text-neutral-500 flex-shrink-0" />
-                    <div className="min-w-0">
-                      <p className="text-xs font-semibold text-white truncate">{album.name}</p>
-                      <p className="text-[10px] text-amber-500 truncate">{album.artist}</p>
+                {results.albums.map((album) => {
+                  const coverSrc = album.sample_track_url
+                    ? `/api/artwork/file?path=${encodeURIComponent(album.sample_track_url)}&thumb=true`
+                    : null;
+
+                  return (
+                    <div
+                      key={`${album.artist}-${album.name}`}
+                      className="p-2 rounded-xl bg-white/[0.02] border border-white/5 flex items-center space-x-2.5"
+                    >
+                      <div className="w-9 h-9 rounded-lg bg-hifi-800 border border-white/10 overflow-hidden flex items-center justify-center flex-shrink-0 relative">
+                        {coverSrc ? (
+                          <img
+                            src={coverSrc}
+                            alt=""
+                            className="w-full h-full object-cover"
+                            onError={(e) => {
+                              (e.target as HTMLElement).style.display = 'none';
+                            }}
+                          />
+                        ) : (
+                          <Disc className="w-5 h-5 text-neutral-500" />
+                        )}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-xs font-semibold text-white truncate">{album.name}</p>
+                        <p className="text-[10px] text-neutral-400 truncate">{album.artist}</p>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}
 
-          {/* Songs */}
+          {/* Tracks */}
           {results.tracks.length > 0 && (
             <div>
-              <h3 className="text-xs uppercase tracking-wider font-bold text-neutral-400 mb-2">Songs ({results.tracks.length})</h3>
+              <h3 className="text-xs uppercase tracking-wider font-bold text-neutral-400 mb-2">Songs</h3>
               <div className="space-y-1">
-                {results.tracks.map((trk, i) => (
-                  <div
-                    key={trk.url || i}
-                    onClick={() => handlePlayTrack(trk)}
-                    className="group flex items-center justify-between p-2.5 rounded-xl bg-white/[0.02] border border-white/5 hover:bg-white/[0.06] cursor-pointer transition text-neutral-200"
-                  >
-                    <div className="min-w-0 flex-1 pr-2">
-                      <p className="text-sm font-medium truncate text-white">{trk.title}</p>
-                      <p className="text-xs text-neutral-400 truncate">
-                        {trk.artist} • {trk.album}
-                      </p>
+                {results.tracks.map((track) => {
+                  const artSrc = (track.filename || track.url)
+                    ? `/api/artwork/file?path=${encodeURIComponent(track.url || track.filename || '')}&thumb=true`
+                    : null;
+
+                  return (
+                    <div
+                      key={track.url || track.id}
+                      onClick={() => handlePlayTrack(track)}
+                      className="group flex items-center justify-between p-2.5 rounded-xl bg-white/[0.02] border border-white/5 hover:bg-white/[0.06] cursor-pointer transition text-neutral-200"
+                    >
+                      <div className="flex items-center space-x-3 min-w-0 flex-1 pr-2">
+                        <div className="w-9 h-9 rounded-lg bg-hifi-800 border border-white/10 overflow-hidden flex items-center justify-center flex-shrink-0">
+                          {artSrc ? (
+                            <img
+                              src={artSrc}
+                              alt=""
+                              className="w-full h-full object-cover"
+                              loading="lazy"
+                              onError={(e) => {
+                                (e.target as HTMLElement).style.display = 'none';
+                              }}
+                            />
+                          ) : (
+                            <Music className="w-4 h-4 text-neutral-500" />
+                          )}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-medium truncate text-white">{track.title}</p>
+                          <p className="text-xs text-neutral-400 truncate">
+                            {track.artist} {track.album ? `• ${track.album}` : ''}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center space-x-2 flex-shrink-0">
+                        <span className="text-xs font-mono text-neutral-400">{track.pretty_length}</span>
+                        <button
+                          onClick={(e) => handleEnqueueTrack(e, track)}
+                          className="p-1.5 rounded-lg hover:bg-white/10 text-neutral-400 hover:text-white transition"
+                          title="Add to queue"
+                          aria-label={`Queue ${track.title}`}
+                        >
+                          <Plus className="w-4 h-4" />
+                        </button>
+                      </div>
                     </div>
-                    <div className="flex items-center space-x-3 flex-shrink-0">
-                      <span className="text-xs font-mono text-neutral-400">{trk.pretty_length}</span>
-                      <button
-                        onClick={(e) => handleEnqueueTrack(e, trk)}
-                        className="p-1.5 rounded-lg hover:bg-white/10 text-neutral-400 hover:text-white transition"
-                        title="Add to queue"
-                      >
-                        <Plus className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}
 
           {results.artists.length === 0 && results.albums.length === 0 && results.tracks.length === 0 && (
-            <div className="text-center py-16 text-neutral-500 text-xs">
-              No results found for "{query}"
+            <div className="text-center py-16 text-xs text-neutral-500">
+              No matching tracks, albums, or artists found for "{query}"
             </div>
           )}
         </div>
       ) : (
-        <div className="text-center py-20 text-neutral-500">
-          <Music className="w-10 h-10 stroke-1 mx-auto mb-2 opacity-40" />
-          <p className="text-xs uppercase tracking-wider">Type above to search your music</p>
+        <div className="text-center py-20 text-neutral-500 text-xs">
+          Type to search your Clementine library
         </div>
       )}
     </div>
