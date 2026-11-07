@@ -19,6 +19,15 @@ export const App: React.FC = () => {
   const [selectedPlaylistId, setSelectedPlaylistId] = useState<number | null>(null);
   const [songs, setSongs] = useState<TrackMetadata[]>([]);
 
+  const selectedPlaylistIdRef = React.useRef<number | null>(selectedPlaylistId);
+  selectedPlaylistIdRef.current = selectedPlaylistId;
+
+  const playlistsRef = React.useRef<PlaylistInfo[]>(playlists);
+  playlistsRef.current = playlists;
+
+  const songsRef = React.useRef<TrackMetadata[]>(songs);
+  songsRef.current = songs;
+
   // Initial Auth Check
   useEffect(() => {
     api.checkAuth()
@@ -60,6 +69,9 @@ export const App: React.FC = () => {
       case 'initial_state':
         if (data.status) setStatus(data.status);
         if (data.playlists) setPlaylists(data.playlists);
+        if (data.active_playlist_id) {
+          setSelectedPlaylistId((prev) => prev ?? data.active_playlist_id);
+        }
         if (data.active_songs) setSongs(data.active_songs);
         break;
 
@@ -98,26 +110,44 @@ export const App: React.FC = () => {
         break;
 
       case 'playlist_songs_updated':
-        if (data.songs) {
-          setSelectedPlaylistId((curSelected) => {
-            if (!curSelected || data.playlist_id === curSelected) {
-              setSongs(data.songs);
-            }
-            return curSelected;
-          });
+        if (data && Array.isArray(data.songs)) {
+          const active = playlistsRef.current.find((p) => p.active) || playlistsRef.current[0];
+          const viewedId = selectedPlaylistIdRef.current ?? active?.id ?? 1;
+          if (data.playlist_id === viewedId) {
+            setSongs(data.songs);
+          }
+          setPlaylists((prev) =>
+            prev.map((p) =>
+              p.id === data.playlist_id ? { ...p, item_count: data.songs.length } : p
+            )
+          );
         }
         break;
 
       case 'playlists_updated':
         if (Array.isArray(data)) {
           setPlaylists(data);
-          setSelectedPlaylistId((curSelected) => {
-            if (!curSelected || !data.some((p) => p.id === curSelected)) {
-              const active = data.find((p) => p.active) || data[0];
-              return active ? active.id : null;
-            }
-            return curSelected;
-          });
+          const active = data.find((p) => p.active) || data[0];
+          const currentSelected = selectedPlaylistIdRef.current;
+          const nextSelected = currentSelected && data.some((p) => p.id === currentSelected)
+            ? currentSelected
+            : (active ? active.id : null);
+
+          if (nextSelected !== currentSelected) {
+            setSelectedPlaylistId(nextSelected);
+          }
+
+          const viewed = data.find((p) => p.id === nextSelected);
+          if (viewed && songsRef.current.length !== viewed.item_count) {
+            api.getPlaylistSongs(viewed.id, true)
+              .then((fresh) => {
+                const nowViewed = selectedPlaylistIdRef.current ?? (data.find((p) => p.active) || data[0])?.id;
+                if (nowViewed === viewed.id) {
+                  setSongs(fresh);
+                }
+              })
+              .catch(() => {});
+          }
         }
         break;
 
@@ -191,6 +221,64 @@ export const App: React.FC = () => {
     }
   };
 
+  const handleRemoveSong = async (playlistId: number, index: number) => {
+    // 1. Optimistic local removal
+    setSongs((prev) => {
+      const next = prev.filter((s, i) => (s.index !== undefined ? s.index !== index : i !== index));
+      return next.map((s, idx) => ({ ...s, index: idx }));
+    });
+    setPlaylists((prev) =>
+      prev.map((p) =>
+        p.id === playlistId ? { ...p, item_count: Math.max(0, p.item_count - 1) } : p
+      )
+    );
+
+    // 2. Call backend
+    try {
+      await api.removeSongs(playlistId, [index]);
+    } catch (e) {
+      console.error('Failed to remove song:', e);
+      const [freshSongs, freshPlaylists] = await Promise.all([
+        api.getPlaylistSongs(playlistId, true),
+        api.getPlaylists(),
+      ]);
+      setSongs(freshSongs);
+      setPlaylists(freshPlaylists);
+    }
+  };
+
+  const handleClearPlaylist = async (playlistId: number) => {
+    setSongs([]);
+    setPlaylists((prev) =>
+      prev.map((p) => (p.id === playlistId ? { ...p, item_count: 0 } : p))
+    );
+    try {
+      await api.clearPlaylist(playlistId);
+    } catch (e) {
+      console.error('Failed to clear playlist:', e);
+      const [freshSongs, freshPlaylists] = await Promise.all([
+        api.getPlaylistSongs(playlistId, true),
+        api.getPlaylists(),
+      ]);
+      setSongs(freshSongs);
+      setPlaylists(freshPlaylists);
+    }
+  };
+
+  const handleRefreshPlaylist = async () => {
+    const targetId = selectedPlaylistId || activePlaylist?.id || 1;
+    try {
+      const [freshSongs, freshPlaylists] = await Promise.all([
+        api.getPlaylistSongs(targetId, true),
+        api.getPlaylists(),
+      ]);
+      setSongs(freshSongs);
+      setPlaylists(freshPlaylists);
+    } catch (e) {
+      console.error('Failed to refresh playlist:', e);
+    }
+  };
+
   return (
     <div className="h-screen h-[100dvh] bg-hifi-900 text-slate-100 flex flex-col font-sans overflow-hidden">
       {/* Top Navigation */}
@@ -216,6 +304,9 @@ export const App: React.FC = () => {
             onRenamePlaylist={handleRenamePlaylist}
             onActivatePlaylist={handleActivatePlaylist}
             onClosePlaylist={handleClosePlaylist}
+            onRemoveSong={handleRemoveSong}
+            onClearPlaylist={handleClearPlaylist}
+            onRefresh={handleRefreshPlaylist}
           />
         )}
         {currentTab === 'library' && (

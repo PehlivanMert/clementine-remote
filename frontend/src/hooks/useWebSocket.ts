@@ -8,6 +8,11 @@ export function useWebSocket(onMessage: MessageHandler) {
   const socketRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<number | null>(null);
   const backoffRef = useRef<number>(1000);
+  const onMessageRef = useRef<MessageHandler>(onMessage);
+
+  useEffect(() => {
+    onMessageRef.current = onMessage;
+  }, [onMessage]);
 
   const connect = useCallback(() => {
     if (socketRef.current && (socketRef.current.readyState === WebSocket.OPEN || socketRef.current.readyState === WebSocket.CONNECTING)) {
@@ -35,7 +40,7 @@ export function useWebSocket(onMessage: MessageHandler) {
         try {
           const payload = JSON.parse(event.data);
           if (payload.event && payload.event !== 'ping' && payload.event !== 'pong') {
-            onMessage(payload.event, payload.data);
+            onMessageRef.current(payload.event, payload.data);
           }
         } catch (e) {
           console.error("WS parse error", e);
@@ -61,7 +66,7 @@ export function useWebSocket(onMessage: MessageHandler) {
     } catch (e) {
       setIsReconnecting(true);
     }
-  }, [onMessage]);
+  }, []);
 
   useEffect(() => {
     connect();

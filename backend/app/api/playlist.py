@@ -18,9 +18,21 @@ async def get_playlists(auth: bool = Depends(require_auth)):
     return list(clementine_client.playlists.values())
 
 @router.get("/{playlist_id}/songs", response_model=List[TrackMetadata])
-async def get_playlist_songs(playlist_id: int, auth: bool = Depends(require_auth)):
-    if playlist_id not in clementine_client.playlist_songs or not clementine_client.playlist_songs[playlist_id]:
-        await clementine_client.request_playlist_songs(playlist_id)
+async def get_playlist_songs(playlist_id: int, refresh: bool = False, auth: bool = Depends(require_auth)):
+    if playlist_id in clementine_client.playlists and clementine_client.playlists[playlist_id].item_count == 0:
+        clementine_client.playlist_songs[playlist_id] = []
+        return []
+
+    needs_fetch = refresh or (playlist_id not in clementine_client.playlist_songs)
+    if not needs_fetch and playlist_id in clementine_client.playlists:
+        expected_count = clementine_client.playlists[playlist_id].item_count
+        cached_count = len(clementine_client.playlist_songs.get(playlist_id, []))
+        if expected_count != cached_count:
+            needs_fetch = True
+
+    if needs_fetch:
+        songs = await clementine_client.request_playlist_songs(playlist_id, wait_response=True, timeout=2.5)
+        return songs
     return clementine_client.playlist_songs.get(playlist_id, [])
 
 @router.post("/change_song")

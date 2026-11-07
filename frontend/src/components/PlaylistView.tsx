@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Play, Trash2, Disc, AlertTriangle, Plus, Edit2, X, Radio } from 'lucide-react';
+import { Play, Trash2, Disc, AlertTriangle, Plus, Edit2, X, Radio, RefreshCw } from 'lucide-react';
 import { TrackMetadata, PlaylistInfo, PlayerStatus } from '../types';
 import { api } from '../api';
 
@@ -13,6 +13,8 @@ interface PlaylistViewProps {
   onRenamePlaylist?: (playlistId: number, name: string) => Promise<void>;
   onActivatePlaylist?: (playlistId: number) => Promise<void>;
   onClosePlaylist?: (playlistId: number) => Promise<void>;
+  onRemoveSong?: (playlistId: number, index: number) => Promise<void>;
+  onClearPlaylist?: (playlistId: number) => Promise<void>;
   onRefresh?: () => void;
 }
 
@@ -26,6 +28,9 @@ export const PlaylistView: React.FC<PlaylistViewProps> = ({
   onRenamePlaylist,
   onActivatePlaylist,
   onClosePlaylist,
+  onRemoveSong,
+  onClearPlaylist,
+  onRefresh,
 }) => {
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [isClearing, setIsClearing] = useState(false);
@@ -53,13 +58,21 @@ export const PlaylistView: React.FC<PlaylistViewProps> = ({
 
   const handleRemoveSong = async (e: React.MouseEvent, index: number) => {
     e.stopPropagation();
-    await api.removeSongs(targetPlId, [index]);
+    if (onRemoveSong) {
+      await onRemoveSong(targetPlId, index);
+    } else {
+      await api.removeSongs(targetPlId, [index]);
+    }
   };
 
   const handleClearPlaylist = async () => {
     setIsClearing(true);
     try {
-      await api.clearPlaylist(playlist?.id);
+      if (onClearPlaylist) {
+        await onClearPlaylist(targetPlId);
+      } else {
+        await api.clearPlaylist(targetPlId);
+      }
       setShowClearConfirm(false);
     } catch (err) {
       console.error("Failed to clear playlist", err);
@@ -240,6 +253,17 @@ export const PlaylistView: React.FC<PlaylistViewProps> = ({
             </button>
           )}
 
+          {onRefresh && (
+            <button
+              onClick={onRefresh}
+              className="p-1.5 rounded-lg text-neutral-400 hover:text-white bg-white/5 hover:bg-white/10 border border-white/10 active:scale-95 transition"
+              title="Refresh Playlist"
+              aria-label="Refresh Playlist"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+            </button>
+          )}
+
           {songs.length > 0 && (
             <button
               onClick={() => setShowClearConfirm(true)}
@@ -272,7 +296,7 @@ export const PlaylistView: React.FC<PlaylistViewProps> = ({
         </div>
       ) : (
         <div className="space-y-1.5 pb-20">
-          {songs.map((song) => {
+          {songs.map((song, mapIndex) => {
             const isCurrent = playlist?.active && currentTrackIndex === song.index;
             const artSrc = (song.filename || song.url)
               ? `/api/artwork/file?path=${encodeURIComponent(song.url || song.filename || '')}&thumb=true`
@@ -336,7 +360,7 @@ export const PlaylistView: React.FC<PlaylistViewProps> = ({
                     {song.pretty_length}
                   </span>
                   <button
-                    onClick={(e) => handleRemoveSong(e, song.index)}
+                    onClick={(e) => handleRemoveSong(e, song.index ?? mapIndex)}
                     className="p-2 rounded-lg text-neutral-400 hover:text-rose-400 hover:bg-rose-500/10 active:scale-90 transition opacity-80 group-hover:opacity-100"
                     title="Remove from queue"
                     aria-label={`Remove ${song.title} from queue`}

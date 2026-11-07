@@ -1,11 +1,23 @@
 import asyncio
 import json
 import logging
-from typing import Set, Dict, Any
+from typing import Set, Dict, Any, Optional
 from fastapi import WebSocket, WebSocketDisconnect
 from ..adapters.clementine.client import clementine_client
 
 logger = logging.getLogger("websocket_manager")
+
+def serialize_for_ws(obj: Any) -> Any:
+    """Recursively convert Pydantic models, dicts, lists into standard JSON-serializable primitives."""
+    if hasattr(obj, "model_dump"):
+        return obj.model_dump()
+    if hasattr(obj, "dict"):
+        return obj.dict()
+    if isinstance(obj, dict):
+        return {str(k): serialize_for_ws(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple, set)):
+        return [serialize_for_ws(item) for item in obj]
+    return obj
 
 class ConnectionManager:
     def __init__(self):
@@ -18,16 +30,10 @@ class ConnectionManager:
         clementine_client.add_listener(self._on_clementine_event)
 
     def _on_clementine_event(self, event_type: str, data: Any):
-        payload = {"event": event_type}
-        if hasattr(data, "model_dump"):
-            payload["data"] = data.model_dump()
-        elif hasattr(data, "dict"):
-            payload["data"] = data.dict()
-        elif isinstance(data, list):
-            payload["data"] = [x.model_dump() if hasattr(x, "model_dump") else x for x in data]
-        else:
-            payload["data"] = data
-
+        payload = {
+            "event": event_type,
+            "data": serialize_for_ws(data)
+        }
         asyncio.create_task(self.broadcast(payload))
 
     async def connect(self, websocket: WebSocket):
@@ -48,7 +54,9 @@ class ConnectionManager:
                 ]
             }
         }
-        await websocket.send_text(json.dumps(snapshot))
+        await websocket.send_text(
+            json.dumps(snapshot, default=lambda o: o.model_dump() if hasattr(o, "model_dump") else str(o))
+        )
 
     def disconnect(self, websocket: WebSocket):
         self.active_connections.discard(websocket)
@@ -58,7 +66,12 @@ class ConnectionManager:
         if not self.active_connections:
             return
 
-        text = json.dumps(message)
+        try:
+            text = json.dumps(message, default=lambda o: o.model_dump() if hasattr(o, "model_dump") else str(o))
+        except Exception as e:
+            logger.error(f"Failed to serialize WebSocket message {message.get('event')}: {e}")
+            return
+
         disconnected = set()
         for connection in list(self.active_connections):
             try:

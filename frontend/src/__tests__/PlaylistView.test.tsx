@@ -177,4 +177,64 @@ describe('PlaylistView Component', () => {
       expect(onCreate).toHaveBeenCalledWith('Synthwave Night');
     });
   });
+
+  it('calls onRemoveSong callback when track remove button is clicked', async () => {
+    const onRemove = vi.fn().mockResolvedValue(undefined);
+
+    render(
+      <PlaylistView
+        playlist={mockPlaylist}
+        songs={mockSongs}
+        status={mockStatus}
+        onRemoveSong={onRemove}
+      />
+    );
+
+    const removeBtn = screen.getByLabelText('Remove Time from queue');
+    fireEvent.click(removeBtn);
+
+    expect(onRemove).toHaveBeenCalledWith(3, 0);
+  });
+
+  it('calls onClearPlaylist callback when clear queue is confirmed', async () => {
+    const onClear = vi.fn().mockResolvedValue(undefined);
+
+    render(
+      <PlaylistView
+        playlist={mockPlaylist}
+        songs={mockSongs}
+        status={mockStatus}
+        onClearPlaylist={onClear}
+      />
+    );
+
+    const clearQueueBtn = screen.getByText('Clear Queue');
+    fireEvent.click(clearQueueBtn);
+
+    const confirmBtn = screen.getAllByText('Clear Queue')[1];
+    fireEvent.click(confirmBtn);
+
+    await waitFor(() => {
+      expect(onClear).toHaveBeenCalledWith(3);
+    });
+  });
+
+  it('renders refresh button and calls onRefresh when clicked', () => {
+    const onRefresh = vi.fn();
+
+    render(
+      <PlaylistView
+        playlist={mockPlaylist}
+        songs={mockSongs}
+        status={mockStatus}
+        onRefresh={onRefresh}
+      />
+    );
+
+    const refreshBtn = screen.getByLabelText('Refresh Playlist');
+    expect(refreshBtn).toBeInTheDocument();
+    fireEvent.click(refreshBtn);
+
+    expect(onRefresh).toHaveBeenCalledTimes(1);
+  });
 });

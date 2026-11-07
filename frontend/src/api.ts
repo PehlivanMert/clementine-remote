@@ -129,8 +129,9 @@ export const api = {
     return handleResponse(res);
   },
 
-  getPlaylistSongs: async (playlistId: number): Promise<TrackMetadata[]> => {
-    const res = await fetch(`/api/playlist/${playlistId}/songs`, { headers: getHeaders() });
+  getPlaylistSongs: async (playlistId: number, refresh: boolean = false): Promise<TrackMetadata[]> => {
+    const url = `/api/playlist/${playlistId}/songs${refresh ? '?refresh=true' : ''}`;
+    const res = await fetch(url, { headers: getHeaders() });
     return handleResponse(res);
   },
 

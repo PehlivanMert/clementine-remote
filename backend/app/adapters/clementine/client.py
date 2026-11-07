@@ -22,6 +22,8 @@ class ClementineClient:
         self.active_playlist_id: int = 1
         self.current_art: Optional[bytes] = None
 
+        self._pending_song_waiters: Dict[int, List[asyncio.Event]] = {}
+
         self._running = False
         self._connected = False
         self._reconnect_task: Optional[asyncio.Task] = None
@@ -66,6 +68,10 @@ class ClementineClient:
                 pass
             self.writer = None
             self.reader = None
+        for pl_id, waiters in list(self._pending_song_waiters.items()):
+            for w in waiters:
+                w.set()
+        self._pending_song_waiters.clear()
         self._notify("clementine_connection_changed", False)
 
     async def _connection_loop(self):
@@ -219,6 +225,18 @@ class ClementineClient:
             self.playlists = new_playlists
             self._notify("playlists_updated", list(self.playlists.values()))
 
+            # Automatically detect song count changes or missing songs from Clementine PC and resync
+            for p in pl_resp.playlist:
+                cached_songs = self.playlist_songs.get(p.id)
+                cached_count = len(cached_songs) if cached_songs is not None else -1
+                if p.item_count == 0:
+                    if cached_songs is None or len(cached_songs) > 0:
+                        self.playlist_songs[p.id] = []
+                        self._notify("playlist_songs_updated", {"playlist_id": p.id, "songs": []})
+                elif cached_count != p.item_count:
+                    # Request fresh song list from Clementine
+                    asyncio.create_task(self.request_playlist_songs(p.id))
+
         elif msg_type == pb.ACTIVE_PLAYLIST_CHANGED:
             new_id = msg.response_active_changed.id
             self.active_playlist_id = new_id
@@ -226,6 +244,14 @@ class ClementineClient:
                 self.playlists[pid].active = (pid == new_id)
             self._notify("active_playlist_changed", new_id)
             self._notify("playlists_updated", list(self.playlists.values()))
+            # Ensure fresh songs for the active playlist
+            if new_id in self.playlists and self.playlists[new_id].item_count == 0:
+                self.playlist_songs[new_id] = []
+                self._notify("playlist_songs_updated", {"playlist_id": new_id, "songs": []})
+            elif new_id not in self.playlist_songs or (
+                new_id in self.playlists and len(self.playlist_songs[new_id]) != self.playlists[new_id].item_count
+            ):
+                asyncio.create_task(self.request_playlist_songs(new_id))
 
         elif msg_type == pb.PLAYLIST_SONGS:
             pl_songs = msg.response_playlist_songs
@@ -260,6 +286,11 @@ class ClementineClient:
                 self._notify("playlists_updated", list(self.playlists.values()))
 
             self._notify("playlist_songs_updated", {"playlist_id": pl_id, "songs": songs})
+
+            # Resolve any pending waiters for this playlist
+            waiters = self._pending_song_waiters.pop(pl_id, [])
+            for w in waiters:
+                w.set()
 
         elif msg_type == pb.REPEAT:
             mode = msg.repeat.repeat_mode
@@ -325,6 +356,8 @@ class ClementineClient:
         if new_playlist_name:
             req.new_playlist_name = new_playlist_name
         await self._send_message(msg)
+        await asyncio.sleep(0.05)
+        await self.request_playlist_songs(target_pl)
 
     async def remove_songs(self, playlist_id: Optional[int], song_indices: List[int]):
         target_pl = playlist_id if (playlist_id is not None and playlist_id > 0) else self.active_playlist_id
@@ -332,6 +365,25 @@ class ClementineClient:
         msg.request_remove_songs.playlist_id = target_pl
         msg.request_remove_songs.songs.extend(song_indices)
         await self._send_message(msg)
+
+        # Optimistically update internal cache and notify WebSocket clients immediately
+        if target_pl in self.playlist_songs:
+            current_songs = self.playlist_songs[target_pl]
+            indices_to_remove = set(song_indices)
+            updated_songs = [
+                s for i, s in enumerate(current_songs)
+                if i not in indices_to_remove and (s.index is None or s.index not in indices_to_remove)
+            ]
+            for idx, s in enumerate(updated_songs):
+                s.index = idx
+            self.playlist_songs[target_pl] = updated_songs
+            if target_pl in self.playlists:
+                self.playlists[target_pl].item_count = len(updated_songs)
+                self._notify("playlists_updated", list(self.playlists.values()))
+            self._notify("playlist_songs_updated", {"playlist_id": target_pl, "songs": updated_songs})
+
+        # Request authoritative ground truth from Clementine
+        await self.request_playlist_songs(target_pl)
 
     async def clear_playlist(self, playlist_id: Optional[int]):
         """Clear all tracks from the specified playlist using RequestUpdatePlaylist."""
@@ -349,6 +401,7 @@ class ClementineClient:
             self.playlists[target_pl].item_count = 0
         self._notify("playlist_songs_updated", {"playlist_id": target_pl, "songs": []})
         self._notify("playlists_updated", list(self.playlists.values()))
+        await self.request_playlist_songs(target_pl)
 
     async def create_playlist(self, name: str):
         """Create a new playlist in Clementine using RequestUpdatePlaylist."""
@@ -446,10 +499,29 @@ class ClementineClient:
         msg.request_playlists.include_closed = False
         await self._send_message(msg)
 
-    async def request_playlist_songs(self, playlist_id: int):
+    async def request_playlist_songs(self, playlist_id: int, wait_response: bool = False, timeout: float = 2.5) -> List[TrackMetadata]:
+        event = None
+        if wait_response:
+            event = asyncio.Event()
+            if playlist_id not in self._pending_song_waiters:
+                self._pending_song_waiters[playlist_id] = []
+            self._pending_song_waiters[playlist_id].append(event)
+
         msg = pb.Message(version=23, type=pb.REQUEST_PLAYLIST_SONGS)
         msg.request_playlist_songs.id = playlist_id
         await self._send_message(msg)
+
+        if wait_response and event:
+            try:
+                await asyncio.wait_for(event.wait(), timeout=timeout)
+            except asyncio.TimeoutError:
+                logger.debug(f"Timeout waiting for playlist {playlist_id} songs")
+            finally:
+                waiters = self._pending_song_waiters.get(playlist_id, [])
+                if event in waiters:
+                    waiters.remove(event)
+
+        return self.playlist_songs.get(playlist_id, [])
 
 # Global client singleton
 clementine_client = ClementineClient()
