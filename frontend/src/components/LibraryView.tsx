@@ -80,7 +80,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({ activePlaylistId = 1 }
     const albumArtSrc = selectedAlbum.sample_track_url || albumTracks[0]?.url;
 
     return (
-      <div className="max-w-md mx-auto px-4 py-4 min-h-[calc(100vh-8rem)] pb-24">
+      <div className="max-w-md landscape:max-w-4xl mx-auto px-4 py-4 w-full pb-10">
         <button
           onClick={() => setSelectedAlbum(null)}
           className="flex items-center space-x-1 text-sm text-neutral-400 hover:text-white mb-4 transition"
@@ -163,9 +163,9 @@ export const LibraryView: React.FC<LibraryViewProps> = ({ activePlaylistId = 1 }
   }
 
   return (
-    <div className="max-w-md mx-auto px-4 py-4 min-h-[calc(100vh-8rem)] pb-24">
+    <div className="max-w-md landscape:max-w-4xl mx-auto px-4 py-4 w-full pb-10">
       {/* Subtabs Bar */}
-      <div className="flex rounded-xl bg-white/5 p-1 mb-5 border border-white/5">
+      <div className="flex max-w-sm landscape:max-w-md mx-auto rounded-xl bg-white/5 p-1 mb-5 border border-white/5">
         {(['albums', 'artists', 'tracks'] as const).map((tab) => (
           <button
             key={tab}
@@ -184,7 +184,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({ activePlaylistId = 1 }
       {loading ? (
         <div className="py-20 text-center text-neutral-400 text-xs">Loading library...</div>
       ) : subTab === 'albums' ? (
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 landscape:grid-cols-4 md:grid-cols-4 lg:grid-cols-5 gap-3">
           {albums.map((album) => {
             const coverSrc = album.sample_track_url
               ? `/api/artwork/file?path=${encodeURIComponent(album.sample_track_url)}&thumb=true`
@@ -223,7 +223,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({ activePlaylistId = 1 }
           })}
         </div>
       ) : subTab === 'artists' ? (
-        <div className="space-y-1.5">
+        <div className="grid grid-cols-1 landscape:grid-cols-2 gap-2">
           {artists.map((artist) => (
             <div
               key={artist.name}

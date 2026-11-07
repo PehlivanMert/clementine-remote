@@ -45,7 +45,7 @@ export const SearchView: React.FC<SearchViewProps> = ({ activePlaylistId = 1 }) 
   };
 
   return (
-    <div className="max-w-md mx-auto px-4 py-4 min-h-[calc(100vh-8rem)] pb-24">
+    <div className="max-w-md landscape:max-w-3xl mx-auto px-4 py-4 w-full pb-10">
       {/* Search Input Bar */}
       <div className="relative mb-5">
         <Search className="w-4 h-4 text-neutral-400 absolute left-3.5 top-1/2 -translate-y-1/2" />

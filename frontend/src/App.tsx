@@ -107,7 +107,7 @@ export const App: React.FC = () => {
   const activePlaylist = playlists.find((p) => p.active) || playlists[0] || null;
 
   return (
-    <div className="min-h-screen bg-hifi-900 text-slate-100 flex flex-col font-sans">
+    <div className="h-screen h-[100dvh] bg-hifi-900 text-slate-100 flex flex-col font-sans overflow-hidden">
       {/* Top Navigation */}
       <Navbar
         status={status}
@@ -116,7 +116,7 @@ export const App: React.FC = () => {
       />
 
       {/* Main Content Area */}
-      <main className="flex-1 pt-14 pb-16">
+      <main className="flex-1 main-content-layout safe-x flex flex-col min-h-0 overflow-y-auto">
         {currentTab === 'player' && (
           <NowPlaying status={status} />
         )}

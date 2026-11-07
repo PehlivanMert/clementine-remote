@@ -26,6 +26,35 @@ body {
   padding-bottom: env(safe-area-inset-bottom, 16px);
 }
 
+.safe-left {
+  padding-left: env(safe-area-inset-left, 0px);
+}
+
+.safe-right {
+  padding-right: env(safe-area-inset-right, 0px);
+}
+
+.safe-x {
+  padding-left: max(1rem, env(safe-area-inset-left, 0px));
+  padding-right: max(1rem, env(safe-area-inset-right, 0px));
+}
+
+.main-content-layout {
+  padding-top: calc(3.5rem + env(safe-area-inset-top, 0px));
+  padding-bottom: calc(4.5rem + env(safe-area-inset-bottom, 16px));
+}
+
+@media (orientation: landscape) {
+  .safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  .main-content-layout {
+    padding-top: calc(2.75rem + env(safe-area-inset-top, 0px));
+    padding-bottom: calc(3.25rem + env(safe-area-inset-bottom, 0px));
+  }
+}
+
 /* Hi-Fi Custom Range Slider */
 input[type=range] {
   -webkit-appearance: none;

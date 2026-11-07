@@ -81,4 +81,16 @@ describe('NowPlaying Component', () => {
     const rangeInput = screen.getByRole('slider', { name: /volume slider/i });
     expect(rangeInput).toBeInTheDocument();
   });
+
+  it('renders responsive 2-column layout and generous volume spacing for mobile', () => {
+    const { container } = render(<NowPlaying status={mockStatus} />);
+
+    const rootWrapper = container.firstChild as HTMLElement;
+    expect(rootWrapper.className).toContain('landscape:flex-row');
+    expect(rootWrapper.className).toContain('landscape:max-w-4xl');
+
+    // Volume container breathing room
+    const volumeSection = container.querySelector('.mb-5');
+    expect(volumeSection).toBeInTheDocument();
+  });
 });

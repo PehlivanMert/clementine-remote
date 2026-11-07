@@ -41,7 +41,7 @@ export const PlaylistView: React.FC<PlaylistViewProps> = ({ playlist, songs, sta
   };
 
   return (
-    <div className="max-w-md mx-auto px-4 py-4 min-h-[calc(100vh-8rem)]">
+    <div className="max-w-md landscape:max-w-4xl mx-auto px-4 py-4 w-full">
       {/* Header */}
       <div className="flex items-center justify-between mb-4 pb-2 border-b border-white/5">
         <div>

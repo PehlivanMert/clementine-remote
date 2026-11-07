@@ -28,18 +28,18 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onSuccess }) => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-xl flex items-center justify-center p-4">
-      <div className="w-full max-w-sm p-6 rounded-3xl bg-hifi-850 border border-white/10 shadow-2xl text-center">
-        <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-amber-500 to-orange-500 mx-auto flex items-center justify-center mb-4 shadow-lg shadow-amber-500/25">
-          <Radio className="w-7 h-7 text-black" />
+    <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-xl flex items-center justify-center p-4 overflow-y-auto">
+      <div className="w-full max-w-sm p-6 landscape:p-4 rounded-3xl bg-hifi-850 border border-white/10 shadow-2xl text-center my-auto">
+        <div className="w-14 h-14 landscape:w-10 landscape:h-10 rounded-2xl bg-gradient-to-tr from-amber-500 to-orange-500 mx-auto flex items-center justify-center mb-4 landscape:mb-2 shadow-lg shadow-amber-500/25">
+          <Radio className="w-7 h-7 landscape:w-5 landscape:h-5 text-black" />
         </div>
 
-        <h2 className="text-xl font-bold text-white mb-1">Clementine Remote</h2>
-        <p className="text-xs text-neutral-400 mb-6">
+        <h2 className="text-xl landscape:text-lg font-bold text-white mb-1">Clementine Remote</h2>
+        <p className="text-xs text-neutral-400 mb-6 landscape:mb-3">
           Enter password to access local playback control
         </p>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-4 landscape:space-y-3">
           <div className="relative">
             <Lock className="w-4 h-4 text-neutral-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
             <input
