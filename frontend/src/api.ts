@@ -175,6 +175,40 @@ export const api = {
     return handleResponse(res);
   },
 
+  createPlaylist: async (name: string) => {
+    const res = await fetch('/api/playlist/create', {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify({ name }),
+    });
+    return handleResponse(res);
+  },
+
+  renamePlaylist: async (playlistId: number, name: string) => {
+    const res = await fetch('/api/playlist/rename', {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify({ playlist_id: playlistId, name }),
+    });
+    return handleResponse(res);
+  },
+
+  activatePlaylist: async (playlistId: number) => {
+    const res = await fetch(`/api/playlist/${playlistId}/activate`, {
+      method: 'POST',
+      headers: getHeaders(),
+    });
+    return handleResponse(res);
+  },
+
+  closePlaylist: async (playlistId: number) => {
+    const res = await fetch(`/api/playlist/${playlistId}/close`, {
+      method: 'POST',
+      headers: getHeaders(),
+    });
+    return handleResponse(res);
+  },
+
   // Library
   getArtists: async (): Promise<ArtistItem[]> => {
     const res = await fetch('/api/library/artists', { headers: getHeaders() });

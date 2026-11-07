@@ -1,18 +1,24 @@
 import React, { useState, useEffect } from 'react';
 import { User, Disc, Play, Plus, ChevronRight, ArrowLeft } from 'lucide-react';
-import { ArtistItem, AlbumItem, TrackMetadata } from '../types';
+import { ArtistItem, AlbumItem, TrackMetadata, PlaylistInfo } from '../types';
 import { api } from '../api';
 
 interface LibraryViewProps {
   activePlaylistId?: number;
+  playlists?: PlaylistInfo[];
 }
 
-export const LibraryView: React.FC<LibraryViewProps> = ({ activePlaylistId = 1 }) => {
+export const LibraryView: React.FC<LibraryViewProps> = ({ activePlaylistId = 1, playlists = [] }) => {
   const [subTab, setSubTab] = useState<'artists' | 'albums' | 'tracks'>('albums');
+  const [targetPlId, setTargetPlId] = useState<number>(activePlaylistId);
   const [artists, setArtists] = useState<ArtistItem[]>([]);
   const [albums, setAlbums] = useState<AlbumItem[]>([]);
   const [tracks, setTracks] = useState<TrackMetadata[]>([]);
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    setTargetPlId(activePlaylistId);
+  }, [activePlaylistId]);
 
   // Drilldown state
   const [selectedAlbum, setSelectedAlbum] = useState<AlbumItem | null>(null);
@@ -54,25 +60,25 @@ export const LibraryView: React.FC<LibraryViewProps> = ({ activePlaylistId = 1 }
 
   const handlePlayTrack = async (track: TrackMetadata) => {
     if (!track.url) return;
-    await api.insertUrls(activePlaylistId, [track.url], true, false);
+    await api.insertUrls(targetPlId, [track.url], true, false);
   };
 
   const handleEnqueueTrack = async (e: React.MouseEvent, track: TrackMetadata) => {
     e.stopPropagation();
     if (!track.url) return;
-    await api.insertUrls(activePlaylistId, [track.url], false, true);
+    await api.insertUrls(targetPlId, [track.url], false, true);
   };
 
   const handlePlayAlbumAll = async () => {
     if (!albumTracks.length) return;
     const urls = albumTracks.map((t) => t.url).filter(Boolean) as string[];
-    await api.insertUrls(activePlaylistId, urls, true, false);
+    await api.insertUrls(targetPlId, urls, true, false);
   };
 
   const handleEnqueueAlbumAll = async () => {
     if (!albumTracks.length) return;
     const urls = albumTracks.map((t) => t.url).filter(Boolean) as string[];
-    await api.insertUrls(activePlaylistId, urls, false, true);
+    await api.insertUrls(targetPlId, urls, false, true);
   };
 
   // If viewing an album detail drilldown
@@ -112,7 +118,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({ activePlaylistId = 1 }
               {albumTracks.length} tracks {selectedAlbum.year ? `• ${selectedAlbum.year}` : ''}
             </p>
 
-            <div className="flex space-x-2 mt-3">
+            <div className="flex flex-wrap items-center gap-2 mt-3">
               <button
                 onClick={handlePlayAlbumAll}
                 className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-black text-xs font-semibold shadow-md shadow-amber-500/20 active:scale-95 transition"
@@ -127,6 +133,22 @@ export const LibraryView: React.FC<LibraryViewProps> = ({ activePlaylistId = 1 }
                 <Plus className="w-3.5 h-3.5" />
                 <span>Queue</span>
               </button>
+              {playlists.length > 1 && (
+                <div className="flex items-center space-x-1 text-xs text-neutral-400">
+                  <span className="text-[11px]">To:</span>
+                  <select
+                    value={targetPlId}
+                    onChange={(e) => setTargetPlId(Number(e.target.value))}
+                    className="bg-white/5 border border-white/10 rounded-lg text-xs text-amber-300 py-1 px-2 focus:outline-none focus:border-amber-500/50"
+                  >
+                    {playlists.map((pl) => (
+                      <option key={pl.id} value={pl.id} className="bg-hifi-800 text-white">
+                        {pl.name} {pl.active ? '★' : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
             </div>
           </div>
         </div>

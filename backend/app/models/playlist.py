@@ -24,6 +24,7 @@ class InsertUrlsRequest(BaseModel):
     position: int = -1
     play_now: bool = False
     enqueue: bool = False
+    new_playlist_name: Optional[str] = None
 
 class RemoveSongsRequest(BaseModel):
     playlist_id: Optional[int] = None
@@ -35,4 +36,19 @@ class ClearPlaylistRequest(BaseModel):
 class UpdatePlaylistRequest(BaseModel):
     playlist_id: Optional[int] = None
     new_playlist_name: Optional[str] = None
+    create_new_playlist: bool = False
     clear_playlist: bool = False
+
+class CreatePlaylistRequest(BaseModel):
+    name: str
+
+class RenamePlaylistRequest(BaseModel):
+    playlist_id: int
+    name: str
+
+class ActivatePlaylistRequest(BaseModel):
+    playlist_id: int
+
+class ClosePlaylistRequest(BaseModel):
+    playlist_id: int
+

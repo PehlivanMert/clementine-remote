@@ -65,13 +65,60 @@ def test_playlist_endpoints(auth_headers):
     assert res.status_code == 200
     assert res.json()["removed_count"] == 1
 
-    # Clear Playlist endpoint
+    # Clear Playlist endpoint with None / default
+    res = client.post("/api/playlist/clear", json={"playlist_id": None}, headers=auth_headers)
+    assert res.status_code == 200
+    assert res.json()["status"] == "ok"
+
+    # Clear Playlist endpoint with specific ID
     res = client.post("/api/playlist/clear", json={"playlist_id": 9999}, headers=auth_headers)
     assert res.status_code == 200
     assert res.json()["status"] == "ok"
     assert "cleared" in res.json()["message"]
 
+    # Create Playlist
+    res = client.post("/api/playlist/create", json={"name": "Night Vibes"}, headers=auth_headers)
+    assert res.status_code == 200
+    assert res.json()["name"] == "Night Vibes"
+
+    # Create Playlist validation (empty name)
+    res = client.post("/api/playlist/create", json={"name": "   "}, headers=auth_headers)
+    assert res.status_code == 400
+
+    # Rename Playlist
+    res = client.post("/api/playlist/rename", json={"playlist_id": 9999, "name": "Chill Beats"}, headers=auth_headers)
+    assert res.status_code == 200
+    assert res.json()["name"] == "Chill Beats"
+
+    # Rename Playlist validation (empty name)
+    res = client.post("/api/playlist/rename", json={"playlist_id": 9999, "name": "  "}, headers=auth_headers)
+    assert res.status_code == 400
+
+    # Activate Playlist
+    res = client.post("/api/playlist/9999/activate", headers=auth_headers)
+    assert res.status_code == 200
+    assert res.json()["active_playlist_id"] == 9999
+
+    # Close Playlist
+    res = client.post("/api/playlist/9999/close", headers=auth_headers)
+    assert res.status_code == 200
+    assert res.json()["closed_playlist_id"] == 9999
+
 def test_artwork_fallback():
     res = client.get("/api/artwork/current")
     assert res.status_code == 200
     assert "image/" in res.headers["content-type"]
+
+@pytest.mark.anyio
+async def test_clementine_client_playlist_none_safety():
+    """Verify that ClementineClient methods tolerate playlist_id=None without TypeError."""
+    from backend.app.adapters.clementine.client import clementine_client
+    
+    # None playlist_id should safely fall back to active_playlist_id
+    await clementine_client.clear_playlist(None)
+    await clementine_client.insert_urls(None, ["file:///tmp/dummy.mp3"])
+    await clementine_client.remove_songs(None, [0])
+    await clementine_client.change_song(None, 0)
+    await clementine_client.rename_playlist(None, "Safe Rename")
+    await clementine_client.close_playlist(None)
+    await clementine_client.update_playlist(None, new_name="Updated")

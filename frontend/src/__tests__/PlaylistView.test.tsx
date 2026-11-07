@@ -100,4 +100,81 @@ describe('PlaylistView Component', () => {
       expect(api.clearPlaylist).toHaveBeenCalledWith(3);
     });
   });
+
+  it('renders multiple playlist pills and switches playlist on click', () => {
+    const playlists: PlaylistInfo[] = [
+      mockPlaylist,
+      { id: 4, name: 'Ambient Chill', item_count: 5, active: false, closed: false, favorite: false }
+    ];
+    const onSelect = vi.fn();
+
+    render(
+      <PlaylistView
+        playlist={mockPlaylist}
+        playlists={playlists}
+        songs={mockSongs}
+        status={mockStatus}
+        onSelectPlaylist={onSelect}
+      />
+    );
+
+    const ambientPill = screen.getByText('Ambient Chill');
+    expect(ambientPill).toBeInTheDocument();
+    fireEvent.click(ambientPill);
+    expect(onSelect).toHaveBeenCalledWith(4);
+  });
+
+  it('opens rename modal and saves new playlist name', async () => {
+    const onRename = vi.fn().mockResolvedValue(undefined);
+
+    render(
+      <PlaylistView
+        playlist={mockPlaylist}
+        songs={mockSongs}
+        status={mockStatus}
+        onRenamePlaylist={onRename}
+      />
+    );
+
+    const renameBtn = screen.getByLabelText('Rename Playlist');
+    fireEvent.click(renameBtn);
+
+    expect(screen.getByText('Rename Playlist')).toBeInTheDocument();
+    const input = screen.getByDisplayValue('Favorites Queue');
+    fireEvent.change(input, { target: { value: 'Best Tracks Ever' } });
+
+    const saveBtn = screen.getByRole('button', { name: 'Save' });
+    fireEvent.click(saveBtn);
+
+    await waitFor(() => {
+      expect(onRename).toHaveBeenCalledWith(3, 'Best Tracks Ever');
+    });
+  });
+
+  it('opens create modal and submits new playlist name', async () => {
+    const onCreate = vi.fn().mockResolvedValue(undefined);
+
+    render(
+      <PlaylistView
+        playlist={mockPlaylist}
+        songs={mockSongs}
+        status={mockStatus}
+        onCreatePlaylist={onCreate}
+      />
+    );
+
+    const newBtn = screen.getByText('New Playlist');
+    fireEvent.click(newBtn);
+
+    expect(screen.getByText('Create New Playlist')).toBeInTheDocument();
+    const input = screen.getByPlaceholderText('e.g. Chill Beats, Favorites');
+    fireEvent.change(input, { target: { value: 'Synthwave Night' } });
+
+    const createSubmit = screen.getByRole('button', { name: 'Create' });
+    fireEvent.click(createSubmit);
+
+    await waitFor(() => {
+      expect(onCreate).toHaveBeenCalledWith('Synthwave Night');
+    });
+  });
 });

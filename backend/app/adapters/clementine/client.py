@@ -72,7 +72,7 @@ class ClementineClient:
         """Main loop that maintains a connection to Clementine."""
         backoff = 1.0
         while self._running:
-            hosts = [settings.CLEMENTINE_HOST, settings.CLEMENTINE_FALLBACK_HOST]
+            hosts = [settings.CLEMENTINE_HOST, "127.0.0.1", settings.CLEMENTINE_FALLBACK_HOST]
             connected = False
 
             for host in hosts:
@@ -203,6 +203,7 @@ class ClementineClient:
 
         elif msg_type == pb.PLAYLISTS:
             pl_resp = msg.response_playlists
+            new_playlists = {}
             for p in pl_resp.playlist:
                 info = PlaylistInfo(
                     id=p.id,
@@ -212,9 +213,10 @@ class ClementineClient:
                     closed=p.closed,
                     favorite=p.favorite
                 )
-                self.playlists[p.id] = info
+                new_playlists[p.id] = info
                 if p.active:
                     self.active_playlist_id = p.id
+            self.playlists = new_playlists
             self._notify("playlists_updated", list(self.playlists.values()))
 
         elif msg_type == pb.ACTIVE_PLAYLIST_CHANGED:
@@ -223,6 +225,7 @@ class ClementineClient:
             for pid in self.playlists:
                 self.playlists[pid].active = (pid == new_id)
             self._notify("active_playlist_changed", new_id)
+            self._notify("playlists_updated", list(self.playlists.values()))
 
         elif msg_type == pb.PLAYLIST_SONGS:
             pl_songs = msg.response_playlist_songs
@@ -254,6 +257,7 @@ class ClementineClient:
             self.playlist_songs[pl_id] = songs
             if pl_id in self.playlists:
                 self.playlists[pl_id].item_count = len(songs)
+                self._notify("playlists_updated", list(self.playlists.values()))
 
             self._notify("playlist_songs_updated", {"playlist_id": pl_id, "songs": songs})
 
@@ -302,15 +306,15 @@ class ClementineClient:
         msg.request_set_track_position.position = pos
         await self._send_message(msg)
 
-    async def change_song(self, playlist_id: int, song_index: int):
-        target_pl = playlist_id if playlist_id > 0 else self.active_playlist_id
+    async def change_song(self, playlist_id: Optional[int], song_index: int):
+        target_pl = playlist_id if (playlist_id is not None and playlist_id > 0) else self.active_playlist_id
         msg = pb.Message(version=23, type=pb.CHANGE_SONG)
         msg.request_change_song.playlist_id = target_pl
         msg.request_change_song.song_index = song_index
         await self._send_message(msg)
 
-    async def insert_urls(self, playlist_id: int, urls: List[str], position: int = -1, play_now: bool = False, enqueue: bool = False):
-        target_pl = playlist_id if playlist_id > 0 else self.active_playlist_id
+    async def insert_urls(self, playlist_id: Optional[int], urls: List[str], position: int = -1, play_now: bool = False, enqueue: bool = False, new_playlist_name: Optional[str] = None):
+        target_pl = playlist_id if (playlist_id is not None and playlist_id > 0) else self.active_playlist_id
         msg = pb.Message(version=23, type=pb.INSERT_URLS)
         req = msg.request_insert_urls
         req.playlist_id = target_pl
@@ -318,18 +322,20 @@ class ClementineClient:
         req.position = position
         req.play_now = play_now
         req.enqueue = enqueue
+        if new_playlist_name:
+            req.new_playlist_name = new_playlist_name
         await self._send_message(msg)
 
-    async def remove_songs(self, playlist_id: int, song_indices: List[int]):
-        target_pl = playlist_id if playlist_id > 0 else self.active_playlist_id
+    async def remove_songs(self, playlist_id: Optional[int], song_indices: List[int]):
+        target_pl = playlist_id if (playlist_id is not None and playlist_id > 0) else self.active_playlist_id
         msg = pb.Message(version=23, type=pb.REMOVE_SONGS)
         msg.request_remove_songs.playlist_id = target_pl
         msg.request_remove_songs.songs.extend(song_indices)
         await self._send_message(msg)
 
-    async def clear_playlist(self, playlist_id: int):
+    async def clear_playlist(self, playlist_id: Optional[int]):
         """Clear all tracks from the specified playlist using RequestUpdatePlaylist."""
-        target_pl = playlist_id if playlist_id > 0 else self.active_playlist_id
+        target_pl = playlist_id if (playlist_id is not None and playlist_id > 0) else self.active_playlist_id
         msg = pb.Message(version=23, type=pb.UPDATE_PLAYLIST)
         req = msg.request_update_playlist
         req.playlist_id = target_pl
@@ -344,15 +350,85 @@ class ClementineClient:
         self._notify("playlist_songs_updated", {"playlist_id": target_pl, "songs": []})
         self._notify("playlists_updated", list(self.playlists.values()))
 
-    async def update_playlist(self, playlist_id: int, new_name: Optional[str] = None, clear_playlist: bool = False):
-        target_pl = playlist_id if playlist_id > 0 else self.active_playlist_id
+    async def create_playlist(self, name: str):
+        """Create a new playlist in Clementine using RequestUpdatePlaylist."""
+        msg = pb.Message(version=23, type=pb.UPDATE_PLAYLIST)
+        req = msg.request_update_playlist
+        req.create_new_playlist = True
+        req.new_playlist_name = name
+        await self._send_message(msg)
+        # Refresh playlists
+        await self.request_playlists()
+
+    async def rename_playlist(self, playlist_id: Optional[int], new_name: str):
+        """Rename an existing playlist using RequestUpdatePlaylist."""
+        target_pl = playlist_id if (playlist_id is not None and playlist_id > 0) else self.active_playlist_id
         msg = pb.Message(version=23, type=pb.UPDATE_PLAYLIST)
         req = msg.request_update_playlist
         req.playlist_id = target_pl
-        if new_name:
-            req.new_playlist_name = new_name
-        if clear_playlist:
-            req.clear_playlist = True
+        req.new_playlist_name = new_name
+        await self._send_message(msg)
+
+        if target_pl in self.playlists:
+            self.playlists[target_pl].name = new_name
+            self._notify("playlists_updated", list(self.playlists.values()))
+        await self.request_playlists()
+
+    async def close_playlist(self, playlist_id: Optional[int]):
+        """Close a playlist tab in Clementine."""
+        target_pl = playlist_id if (playlist_id is not None and playlist_id > 0) else self.active_playlist_id
+        msg = pb.Message(version=23, type=pb.CLOSE_PLAYLIST)
+        msg.request_close_playlist.playlist_id = target_pl
+        await self._send_message(msg)
+
+        if target_pl in self.playlists:
+            del self.playlists[target_pl]
+            self._notify("playlists_updated", list(self.playlists.values()))
+
+    async def open_playlist(self, playlist_id: int):
+        """Open a closed playlist in Clementine."""
+        msg = pb.Message(version=23, type=pb.OPEN_PLAYLIST)
+        msg.request_open_playlist.playlist_id = playlist_id
+        await self._send_message(msg)
+        await self.request_playlists()
+
+    async def activate_playlist(self, playlist_id: Optional[int]):
+        """Switch Clementine's active playlist via D-Bus MPRIS2, fallback to remote state."""
+        target_pl = playlist_id if (playlist_id is not None and playlist_id > 0) else self.active_playlist_id
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                "busctl", "--user", "call", "org.mpris.MediaPlayer2.clementine",
+                "/org/mpris/MediaPlayer2", "org.mpris.MediaPlayer2.Playlists", "ActivatePlaylist",
+                "o", f"/org/clementineplayer/clementine/PlaylistId/{target_pl}",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
+            )
+            await asyncio.wait_for(proc.communicate(), timeout=1.0)
+        except Exception as e:
+            logger.debug(f"DBus ActivatePlaylist call note: {e}")
+
+        self.active_playlist_id = target_pl
+        for pid, pl in self.playlists.items():
+            pl.active = (pid == target_pl)
+
+        self._notify("active_playlist_changed", target_pl)
+        self._notify("playlists_updated", list(self.playlists.values()))
+        await self.request_playlist_songs(target_pl)
+
+    async def update_playlist(self, playlist_id: Optional[int], new_name: Optional[str] = None, clear_playlist: bool = False, create_new_playlist: bool = False):
+        target_pl = playlist_id if (playlist_id is not None and playlist_id > 0) else self.active_playlist_id
+        msg = pb.Message(version=23, type=pb.UPDATE_PLAYLIST)
+        req = msg.request_update_playlist
+        if create_new_playlist:
+            req.create_new_playlist = True
+            if new_name:
+                req.new_playlist_name = new_name
+        else:
+            req.playlist_id = target_pl
+            if new_name:
+                req.new_playlist_name = new_name
+            if clear_playlist:
+                req.clear_playlist = True
         await self._send_message(msg)
 
     async def set_shuffle(self, mode: int):

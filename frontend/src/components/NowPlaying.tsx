@@ -230,27 +230,27 @@ export const NowPlaying: React.FC<NowPlayingProps> = ({ status }) => {
           </button>
         </div>
 
-        {/* Volume Bar with Step Controls & Slider */}
-        <div className="w-full px-1 mt-1 mb-5 landscape:mb-0">
-          <div className="w-full flex items-center space-x-2 px-3 py-2.5 landscape:py-1.5 rounded-2xl bg-white/[0.04] border border-white/10 shadow-lg shadow-black/20 backdrop-blur-md">
+        {/* Ultra-Minimal Low-Profile Volume Bar */}
+        <div className="w-full px-1.5 mt-0.5 mb-5 landscape:mb-0">
+          <div className="w-full flex items-center space-x-1.5 sm:space-x-2 py-0.5 landscape:py-0">
             <button
               onClick={toggleMute}
-              className="p-1.5 rounded-lg text-neutral-400 hover:text-white hover:bg-white/5 transition"
+              className="p-1 rounded-md text-neutral-400 hover:text-amber-400 transition active:scale-95 flex-shrink-0"
               title={status?.volume === 0 ? "Unmute" : "Mute"}
               aria-label={status?.volume === 0 ? "Unmute" : "Mute"}
             >
               {(status?.volume || 0) === 0 ? (
                 <VolumeX className="w-4 h-4 text-rose-400" />
               ) : (status?.volume || 0) < 50 ? (
-                <Volume1 className="w-4 h-4 text-neutral-300" />
+                <Volume1 className="w-4 h-4 text-neutral-400 hover:text-white" />
               ) : (
-                <Volume2 className="w-4 h-4 text-neutral-300" />
+                <Volume2 className="w-4 h-4 text-neutral-400 hover:text-white" />
               )}
             </button>
 
             <button
               onClick={() => handleVolumeStep(-5)}
-              className="p-1.5 rounded-lg text-neutral-400 hover:text-white hover:bg-white/5 active:scale-90 transition"
+              className="p-1 rounded text-neutral-500 hover:text-neutral-300 active:scale-90 transition flex-shrink-0"
               title="Volume Down"
               aria-label="Decrease volume by 5%"
             >
@@ -263,20 +263,20 @@ export const NowPlaying: React.FC<NowPlayingProps> = ({ status }) => {
               max={100}
               value={status?.volume || 0}
               onChange={handleVolumeChange}
-              className="flex-1 accent-amber-500 h-1.5"
+              className="flex-1 volume-slider"
               aria-label="Volume slider"
             />
 
             <button
               onClick={() => handleVolumeStep(5)}
-              className="p-1.5 rounded-lg text-neutral-400 hover:text-white hover:bg-white/5 active:scale-90 transition"
+              className="p-1 rounded text-neutral-500 hover:text-neutral-300 active:scale-90 transition flex-shrink-0"
               title="Volume Up"
               aria-label="Increase volume by 5%"
             >
               <Plus className="w-3.5 h-3.5" />
             </button>
 
-            <span className="text-xs font-mono text-neutral-400 w-8 text-right">
+            <span className="text-[11px] font-mono text-neutral-400 w-7 text-right select-none flex-shrink-0">
               {status?.volume || 0}%
             </span>
           </div>

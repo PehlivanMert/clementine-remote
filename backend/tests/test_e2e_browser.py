@@ -52,10 +52,14 @@ def test_iphone_safari_experience(live_server):
 
         # 2. Enter password if prompted
         pwd_input = page.locator('input[type="password"]')
-        if pwd_input.is_visible():
+        try:
+            pwd_input.wait_for(state="visible", timeout=2500)
             page.fill('input[type="password"]', settings.WEB_PASSWORD)
             page.click('button[type="submit"]')
-            page.wait_for_timeout(1000)
+            pwd_input.wait_for(state="hidden", timeout=3000)
+            page.wait_for_timeout(500)
+        except Exception:
+            pass
 
         # 3. Now Playing Screen (Portrait)
         page.screenshot(path="/home/mert/clementine-web-remote/screenshots/02_now_playing_iphone.png")
@@ -134,10 +138,14 @@ def test_iphone_landscape_experience(live_server):
 
         # 2. Enter password if prompted
         pwd_input = page.locator('input[type="password"]')
-        if pwd_input.is_visible():
+        try:
+            pwd_input.wait_for(state="visible", timeout=2500)
             page.fill('input[type="password"]', settings.WEB_PASSWORD)
             page.click('button[type="submit"]')
-            page.wait_for_timeout(1000)
+            pwd_input.wait_for(state="hidden", timeout=3000)
+            page.wait_for_timeout(500)
+        except Exception:
+            pass
 
         # 3. Now Playing Screen (Landscape 2-column view)
         page.screenshot(path="/home/mert/clementine-web-remote/screenshots/02_now_playing_iphone_landscape.png")

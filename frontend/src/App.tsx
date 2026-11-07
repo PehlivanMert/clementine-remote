@@ -12,10 +12,11 @@ import { useWebSocket } from './hooks/useWebSocket';
 import { api } from './api';
 
 export const App: React.FC = () => {
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(true);
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => !!localStorage.getItem('clementine_token'));
   const [currentTab, setCurrentTab] = useState<TabType>('player');
   const [status, setStatus] = useState<PlayerStatus | null>(null);
   const [playlists, setPlaylists] = useState<PlaylistInfo[]>([]);
+  const [selectedPlaylistId, setSelectedPlaylistId] = useState<number | null>(null);
   const [songs, setSongs] = useState<TrackMetadata[]>([]);
 
   // Initial Auth Check
@@ -44,6 +45,7 @@ export const App: React.FC = () => {
       setPlaylists(pls);
       const activePl = pls.find((p) => p.active) || pls[0];
       if (activePl) {
+        setSelectedPlaylistId((prev) => prev ?? activePl.id);
         const sngs = await api.getPlaylistSongs(activePl.id);
         setSongs(sngs);
       }
@@ -89,12 +91,34 @@ export const App: React.FC = () => {
         setStatus((prev) => (prev ? { ...prev, clementine_connected: data } : null));
         break;
 
+      case 'active_playlist_changed':
+        setPlaylists((prev) =>
+          prev.map((p) => ({ ...p, active: p.id === data }))
+        );
+        break;
+
       case 'playlist_songs_updated':
-        if (data.songs) setSongs(data.songs);
+        if (data.songs) {
+          setSelectedPlaylistId((curSelected) => {
+            if (!curSelected || data.playlist_id === curSelected) {
+              setSongs(data.songs);
+            }
+            return curSelected;
+          });
+        }
         break;
 
       case 'playlists_updated':
-        if (Array.isArray(data)) setPlaylists(data);
+        if (Array.isArray(data)) {
+          setPlaylists(data);
+          setSelectedPlaylistId((curSelected) => {
+            if (!curSelected || !data.some((p) => p.id === curSelected)) {
+              const active = data.find((p) => p.active) || data[0];
+              return active ? active.id : null;
+            }
+            return curSelected;
+          });
+        }
         break;
 
       default:
@@ -105,6 +129,67 @@ export const App: React.FC = () => {
   const { isConnected: wsConnected } = useWebSocket(handleWsEvent);
 
   const activePlaylist = playlists.find((p) => p.active) || playlists[0] || null;
+  const currentViewedPlaylist = playlists.find((p) => p.id === selectedPlaylistId) || activePlaylist;
+
+  const handleSelectPlaylist = async (id: number) => {
+    setSelectedPlaylistId(id);
+    try {
+      const sngs = await api.getPlaylistSongs(id);
+      setSongs(sngs);
+    } catch (e) {
+      console.error('Failed to load playlist songs', e);
+    }
+  };
+
+  const handleCreatePlaylist = async (name: string) => {
+    await api.createPlaylist(name);
+    try {
+      const pls = await api.getPlaylists();
+      setPlaylists(pls);
+      const created = pls.find((p) => p.name === name);
+      if (created) {
+        await handleSelectPlaylist(created.id);
+      }
+    } catch (e) {
+      console.error('Failed to refresh after create', e);
+    }
+  };
+
+  const handleRenamePlaylist = async (id: number, name: string) => {
+    await api.renamePlaylist(id, name);
+    try {
+      const pls = await api.getPlaylists();
+      setPlaylists(pls);
+    } catch (e) {
+      console.error('Failed to refresh after rename', e);
+    }
+  };
+
+  const handleActivatePlaylist = async (id: number) => {
+    await api.activatePlaylist(id);
+    setPlaylists((prev) =>
+      prev.map((p) => ({ ...p, active: p.id === id }))
+    );
+  };
+
+  const handleClosePlaylist = async (id: number) => {
+    await api.closePlaylist(id);
+    try {
+      const pls = await api.getPlaylists();
+      setPlaylists(pls);
+      if (selectedPlaylistId === id) {
+        const next = pls.find((p) => p.active) || pls[0];
+        if (next) {
+          await handleSelectPlaylist(next.id);
+        } else {
+          setSelectedPlaylistId(null);
+          setSongs([]);
+        }
+      }
+    } catch (e) {
+      console.error('Failed to refresh after close', e);
+    }
+  };
 
   return (
     <div className="h-screen h-[100dvh] bg-hifi-900 text-slate-100 flex flex-col font-sans overflow-hidden">
@@ -122,16 +207,28 @@ export const App: React.FC = () => {
         )}
         {currentTab === 'queue' && (
           <PlaylistView
-            playlist={activePlaylist}
+            playlist={currentViewedPlaylist}
+            playlists={playlists}
             songs={songs}
             status={status}
+            onSelectPlaylist={handleSelectPlaylist}
+            onCreatePlaylist={handleCreatePlaylist}
+            onRenamePlaylist={handleRenamePlaylist}
+            onActivatePlaylist={handleActivatePlaylist}
+            onClosePlaylist={handleClosePlaylist}
           />
         )}
         {currentTab === 'library' && (
-          <LibraryView activePlaylistId={activePlaylist?.id} />
+          <LibraryView
+            activePlaylistId={currentViewedPlaylist?.id || activePlaylist?.id}
+            playlists={playlists}
+          />
         )}
         {currentTab === 'search' && (
-          <SearchView activePlaylistId={activePlaylist?.id} />
+          <SearchView
+            activePlaylistId={currentViewedPlaylist?.id || activePlaylist?.id}
+            playlists={playlists}
+          />
         )}
         {currentTab === 'system' && (
           <SystemView

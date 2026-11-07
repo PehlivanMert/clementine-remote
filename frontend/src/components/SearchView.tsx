@@ -1,16 +1,22 @@
 import React, { useState, useEffect } from 'react';
 import { Search, X, Plus, User, Disc, Music } from 'lucide-react';
-import { SearchResults, TrackMetadata } from '../types';
+import { SearchResults, TrackMetadata, PlaylistInfo } from '../types';
 import { api } from '../api';
 
 interface SearchViewProps {
   activePlaylistId?: number;
+  playlists?: PlaylistInfo[];
 }
 
-export const SearchView: React.FC<SearchViewProps> = ({ activePlaylistId = 1 }) => {
+export const SearchView: React.FC<SearchViewProps> = ({ activePlaylistId = 1, playlists = [] }) => {
   const [query, setQuery] = useState('');
+  const [targetPlId, setTargetPlId] = useState<number>(activePlaylistId);
   const [results, setResults] = useState<SearchResults | null>(null);
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    setTargetPlId(activePlaylistId);
+  }, [activePlaylistId]);
 
   useEffect(() => {
     if (!query.trim()) {
@@ -35,17 +41,35 @@ export const SearchView: React.FC<SearchViewProps> = ({ activePlaylistId = 1 }) 
 
   const handlePlayTrack = async (track: TrackMetadata) => {
     if (!track.url) return;
-    await api.insertUrls(activePlaylistId, [track.url], true, false);
+    await api.insertUrls(targetPlId, [track.url], true, false);
   };
 
   const handleEnqueueTrack = async (e: React.MouseEvent, track: TrackMetadata) => {
     e.stopPropagation();
     if (!track.url) return;
-    await api.insertUrls(activePlaylistId, [track.url], false, true);
+    await api.insertUrls(targetPlId, [track.url], false, true);
   };
 
   return (
     <div className="max-w-md landscape:max-w-3xl mx-auto px-4 py-4 w-full pb-10">
+      {/* Target Playlist Selector Bar if multiple playlists */}
+      {playlists.length > 1 && (
+        <div className="flex items-center justify-between mb-3 px-1 text-xs text-neutral-400">
+          <span>Add tracks to:</span>
+          <select
+            value={targetPlId}
+            onChange={(e) => setTargetPlId(Number(e.target.value))}
+            className="bg-white/5 border border-white/10 rounded-lg text-xs text-amber-300 py-1 px-2 focus:outline-none focus:border-amber-500/50"
+          >
+            {playlists.map((pl) => (
+              <option key={pl.id} value={pl.id} className="bg-hifi-800 text-white">
+                {pl.name} {pl.active ? '★' : ''}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+
       {/* Search Input Bar */}
       <div className="relative mb-5">
         <Search className="w-4 h-4 text-neutral-400 absolute left-3.5 top-1/2 -translate-y-1/2" />

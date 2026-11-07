@@ -3,7 +3,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from ..adapters.clementine.client import clementine_client
 from ..models.playlist import (
     PlaylistInfo, ChangeSongRequest, InsertUrlsRequest, RemoveSongsRequest,
-    ClearPlaylistRequest, UpdatePlaylistRequest
+    ClearPlaylistRequest, UpdatePlaylistRequest, CreatePlaylistRequest,
+    RenamePlaylistRequest, ActivatePlaylistRequest, ClosePlaylistRequest
 )
 from ..models.player import TrackMetadata
 from ..security import require_auth
@@ -36,7 +37,8 @@ async def insert_urls(req: InsertUrlsRequest, auth: bool = Depends(require_auth)
         urls=req.urls,
         position=req.position,
         play_now=req.play_now,
-        enqueue=req.enqueue
+        enqueue=req.enqueue,
+        new_playlist_name=req.new_playlist_name
     )
     return {"status": "ok", "playlist_id": target_id, "inserted_count": len(req.urls)}
 
@@ -52,12 +54,37 @@ async def clear_playlist(req: ClearPlaylistRequest, auth: bool = Depends(require
     await clementine_client.clear_playlist(target_id)
     return {"status": "ok", "playlist_id": target_id, "message": "Playlist cleared"}
 
+@router.post("/create")
+async def create_playlist(req: CreatePlaylistRequest, auth: bool = Depends(require_auth)):
+    if not req.name.strip():
+        raise HTTPException(status_code=400, detail="Playlist name cannot be empty")
+    await clementine_client.create_playlist(req.name.strip())
+    return {"status": "ok", "name": req.name.strip()}
+
+@router.post("/rename")
+async def rename_playlist(req: RenamePlaylistRequest, auth: bool = Depends(require_auth)):
+    if not req.name.strip():
+        raise HTTPException(status_code=400, detail="Playlist name cannot be empty")
+    await clementine_client.rename_playlist(req.playlist_id, req.name.strip())
+    return {"status": "ok", "playlist_id": req.playlist_id, "name": req.name.strip()}
+
+@router.post("/{playlist_id}/activate")
+async def activate_playlist(playlist_id: int, auth: bool = Depends(require_auth)):
+    await clementine_client.activate_playlist(playlist_id)
+    return {"status": "ok", "active_playlist_id": playlist_id}
+
+@router.post("/{playlist_id}/close")
+async def close_playlist(playlist_id: int, auth: bool = Depends(require_auth)):
+    await clementine_client.close_playlist(playlist_id)
+    return {"status": "ok", "closed_playlist_id": playlist_id}
+
 @router.post("/update")
 async def update_playlist(req: UpdatePlaylistRequest, auth: bool = Depends(require_auth)):
     target_id = req.playlist_id if req.playlist_id and req.playlist_id > 0 else clementine_client.active_playlist_id
     await clementine_client.update_playlist(
         playlist_id=target_id,
         new_name=req.new_playlist_name,
-        clear_playlist=req.clear_playlist
+        clear_playlist=req.clear_playlist,
+        create_new_playlist=req.create_new_playlist
     )
     return {"status": "ok", "playlist_id": target_id}
