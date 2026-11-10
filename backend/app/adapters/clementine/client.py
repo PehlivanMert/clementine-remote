@@ -176,7 +176,7 @@ class ClementineClient:
                 url=raw.url if raw.HasField('url') else "",
                 has_art=bool(raw.art)
             )
-            file_meta = audio_meta_service.probe_file(track.filename or track.url)
+            file_meta = audio_meta_service.probe_file(track.url or track.filename)
             if file_meta:
                 track.audio_format = file_meta.get("audio_format")
                 track.bit_depth = file_meta.get("bit_depth")

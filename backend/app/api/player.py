@@ -20,10 +20,11 @@ async def get_lyrics(
     auth: bool = Depends(require_auth)
 ):
     cur = clementine_client.status.current_track
+    is_custom = bool(artist or title)
     target_artist = artist or (cur.artist if cur else "")
     target_title = title or (cur.title if cur else "")
-    target_album = album or (cur.album if cur else "")
-    target_duration = duration or (cur.length if cur else 0)
+    target_album = album or ("" if is_custom else (cur.album if cur else ""))
+    target_duration = duration or (0 if is_custom else (cur.length if cur else 0))
 
     if not target_artist or not target_title:
         return {"synced": False, "lines": [], "plain": "Şarkı bilgisi eksik.", "source": "none"}

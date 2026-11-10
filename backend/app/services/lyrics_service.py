@@ -55,6 +55,10 @@ class LyricsService:
                 params["duration"] = str(duration)
 
             resp = await self._client.get("https://lrclib.net/api/get", params=params)
+            if resp.status_code == 404 and (album or (duration and duration > 0)):
+                # Retry with relaxed criteria (just artist and title)
+                resp = await self._client.get("https://lrclib.net/api/get", params={"artist_name": artist, "track_name": title})
+
             if resp.status_code == 200:
                 data = resp.json()
                 synced_lrc = data.get("syncedLyrics")
