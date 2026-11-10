@@ -1,11 +1,37 @@
-from fastapi import APIRouter, Depends
+from typing import Optional
+from fastapi import APIRouter, Depends, Query
 from ..adapters.clementine.client import clementine_client
+from ..services.lyrics_service import lyrics_service
 from ..models.player import (
     PlayerStatus, VolumeCommand, SeekCommand, ShuffleCommand, RepeatCommand
 )
 from ..security import require_auth
 
 router = APIRouter(prefix="/api/player", tags=["player"])
+
+@router.get("/lyrics")
+async def get_lyrics(
+    artist: Optional[str] = Query(None),
+    title: Optional[str] = Query(None),
+    album: Optional[str] = Query(None),
+    duration: Optional[int] = Query(None),
+    auth: bool = Depends(require_auth)
+):
+    cur = clementine_client.status.current_track
+    target_artist = artist or (cur.artist if cur else "")
+    target_title = title or (cur.title if cur else "")
+    target_album = album or (cur.album if cur else "")
+    target_duration = duration or (cur.length if cur else 0)
+
+    if not target_artist or not target_title:
+        return {"synced": False, "lines": [], "plain": "Şarkı bilgisi eksik.", "source": "none"}
+
+    return await lyrics_service.fetch_lyrics(
+        artist=target_artist,
+        title=target_title,
+        album=target_album,
+        duration=target_duration
+    )
 
 @router.get("/status", response_model=PlayerStatus)
 async def get_status(auth: bool = Depends(require_auth)):
