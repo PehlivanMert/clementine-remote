@@ -13,6 +13,18 @@
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="icon" type="image/svg+xml" href="/icons/clementine-icon.svg" />
     <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+    <script>
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.getRegistrations().then(function(regs) {
+          regs.forEach(function(r) { r.unregister(); });
+        });
+      }
+      if ('caches' in window) {
+        caches.keys().then(function(keys) {
+          keys.forEach(function(k) { caches.delete(k); });
+        });
+      }
+    </script>
   </head>
   <body class="bg-hifi-900 text-slate-100 antialiased overflow-x-hidden selection:bg-hifi-accent selection:text-black">
     <div id="root"></div>
