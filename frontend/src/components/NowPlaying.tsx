@@ -12,10 +12,12 @@ import {
   Music,
   Plus,
   Minus,
+  Mic2,
 } from 'lucide-react';
 import { PlayerStatus } from '../types';
 import { api } from '../api';
 import { AudiophileBadge } from './AudiophileBadge';
+import { LyricsModal } from './LyricsModal';
 
 interface NowPlayingProps {
   status: PlayerStatus | null;
@@ -26,6 +28,7 @@ export const NowPlaying: React.FC<NowPlayingProps> = ({ status }) => {
   const [seeking, setSeeking] = useState(false);
   const [seekVal, setSeekVal] = useState(0);
   const [artCacheBuster, setArtCacheBuster] = useState(Date.now());
+  const [isLyricsOpen, setIsLyricsOpen] = useState(false);
   const lastUnmutedVolume = useRef<number>(75);
   const seekLockTimer = useRef<number | null>(null);
 
@@ -151,8 +154,19 @@ export const NowPlaying: React.FC<NowPlayingProps> = ({ status }) => {
           <p className="text-xs landscape:text-[11px] text-neutral-400 truncate mt-0.5">
             {currentTrack?.album || 'Idle'}
           </p>
-          <div className="flex items-center justify-center landscape:justify-start mt-1.5">
+          <div className="flex items-center justify-center landscape:justify-start gap-2 mt-1.5 flex-wrap">
             <AudiophileBadge track={currentTrack} />
+            {currentTrack && (
+              <button
+                onClick={() => setIsLyricsOpen(true)}
+                className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium text-neutral-300 hover:text-amber-300 bg-white/5 hover:bg-amber-500/15 border border-white/10 hover:border-amber-500/30 transition backdrop-blur-sm cursor-pointer active:scale-95"
+                title="Şarkı Sözleri (Lyrics)"
+                aria-label="Şarkı Sözlerini Aç"
+              >
+                <Mic2 className="w-3 h-3 text-amber-400" />
+                <span>Sözler</span>
+              </button>
+            )}
           </div>
         </div>
 
@@ -298,6 +312,17 @@ export const NowPlaying: React.FC<NowPlayingProps> = ({ status }) => {
           </div>
         </div>
       </div>
+
+      {/* Lyrics Modal */}
+      <LyricsModal
+        isOpen={isLyricsOpen}
+        onClose={() => setIsLyricsOpen(false)}
+        currentTrack={currentTrack}
+        currentPosition={currentPos}
+        onSeek={async (pos) => {
+          await api.seek(Math.floor(pos));
+        }}
+      />
     </div>
   );
 };

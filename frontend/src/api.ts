@@ -1,4 +1,14 @@
-import { PlayerStatus, PlaylistInfo, TrackMetadata, ArtistItem, AlbumItem, SearchResults, SystemInfo } from './types';
+import {
+  PlayerStatus,
+  PlaylistInfo,
+  TrackMetadata,
+  ArtistItem,
+  AlbumItem,
+  SearchResults,
+  SystemInfo,
+  LyricsResponse,
+  SleepTimerStatus,
+} from './types';
 
 const getHeaders = () => {
   const token = localStorage.getItem('clementine_token');
@@ -101,6 +111,38 @@ export const api = {
       method: 'POST',
       headers: getHeaders(),
       body: JSON.stringify({ position }),
+    });
+    return handleResponse(res);
+  },
+
+  getLyrics: async (artist?: string, title?: string, album?: string, duration?: number): Promise<LyricsResponse> => {
+    let url = '/api/player/lyrics?';
+    if (artist) url += `artist=${encodeURIComponent(artist)}&`;
+    if (title) url += `title=${encodeURIComponent(title)}&`;
+    if (album) url += `album=${encodeURIComponent(album)}&`;
+    if (duration) url += `duration=${encodeURIComponent(duration)}&`;
+    const res = await fetch(url, { headers: getHeaders() });
+    return handleResponse(res);
+  },
+
+  getSleepTimer: async (): Promise<SleepTimerStatus> => {
+    const res = await fetch('/api/player/sleep-timer', { headers: getHeaders() });
+    return handleResponse(res);
+  },
+
+  startSleepTimer: async (params: { duration_minutes?: number; duration_seconds?: number; end_of_track?: boolean }): Promise<SleepTimerStatus> => {
+    const res = await fetch('/api/player/sleep-timer', {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify(params),
+    });
+    return handleResponse(res);
+  },
+
+  cancelSleepTimer: async (): Promise<SleepTimerStatus> => {
+    const res = await fetch('/api/player/sleep-timer', {
+      method: 'DELETE',
+      headers: getHeaders(),
     });
     return handleResponse(res);
   },
