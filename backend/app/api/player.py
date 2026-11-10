@@ -3,8 +3,10 @@ from fastapi import APIRouter, Depends, Query
 from ..adapters.clementine.client import clementine_client
 from ..services.lyrics_service import lyrics_service
 from ..models.player import (
-    PlayerStatus, VolumeCommand, SeekCommand, ShuffleCommand, RepeatCommand
+    PlayerStatus, VolumeCommand, SeekCommand, ShuffleCommand, RepeatCommand,
+    SleepTimerRequest
 )
+from ..services.sleep_timer_service import sleep_timer_service
 from ..security import require_auth
 
 router = APIRouter(prefix="/api/player", tags=["player"])
@@ -86,3 +88,19 @@ async def set_shuffle(cmd: ShuffleCommand, auth: bool = Depends(require_auth)):
 async def set_repeat(cmd: RepeatCommand, auth: bool = Depends(require_auth)):
     await clementine_client.set_repeat(cmd.mode)
     return {"status": "ok", "repeat_mode": cmd.mode}
+
+@router.get("/sleep-timer")
+async def get_sleep_timer(auth: bool = Depends(require_auth)):
+    return sleep_timer_service.get_status()
+
+@router.post("/sleep-timer")
+async def start_sleep_timer(req: SleepTimerRequest, auth: bool = Depends(require_auth)):
+    return sleep_timer_service.start_timer(
+        duration_minutes=req.duration_minutes,
+        duration_seconds=req.duration_seconds,
+        end_of_track=req.end_of_track
+    )
+
+@router.delete("/sleep-timer")
+async def cancel_sleep_timer(auth: bool = Depends(require_auth)):
+    return await sleep_timer_service.cancel_timer()

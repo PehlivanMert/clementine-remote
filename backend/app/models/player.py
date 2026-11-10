@@ -46,3 +46,8 @@ class ShuffleCommand(BaseModel):
 
 class RepeatCommand(BaseModel):
     mode: int
+
+class SleepTimerRequest(BaseModel):
+    duration_minutes: Optional[int] = None
+    duration_seconds: Optional[int] = None
+    end_of_track: bool = False

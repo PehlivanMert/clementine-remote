@@ -122,3 +122,21 @@ async def test_clementine_client_playlist_none_safety():
     await clementine_client.rename_playlist(None, "Safe Rename")
     await clementine_client.close_playlist(None)
     await clementine_client.update_playlist(None, new_name="Updated")
+
+def test_sleep_timer_api(auth_headers):
+    # GET initial status
+    res = client.get("/api/player/sleep-timer", headers=auth_headers)
+    assert res.status_code == 200
+    assert "active" in res.json()
+
+    # POST start timer
+    res = client.post("/api/player/sleep-timer", json={"duration_minutes": 15}, headers=auth_headers)
+    assert res.status_code == 200
+    data = res.json()
+    assert data["active"] is True
+    assert data["remaining_seconds"] == 15 * 60
+
+    # DELETE cancel timer
+    res = client.delete("/api/player/sleep-timer", headers=auth_headers)
+    assert res.status_code == 200
+    assert res.json()["active"] is False
