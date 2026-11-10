@@ -127,6 +127,33 @@ export const SystemView: React.FC<SystemViewProps> = ({ onLogout }) => {
         </div>
       </div>
 
+      {/* Purge Cache & Hard Reload */}
+      <button
+        onClick={async () => {
+          if ('serviceWorker' in navigator) {
+            try {
+              const regs = await navigator.serviceWorker.getRegistrations();
+              for (const r of regs) {
+                await r.unregister();
+              }
+            } catch (e) {}
+          }
+          if ('caches' in window) {
+            try {
+              const keys = await caches.keys();
+              for (const k of keys) {
+                await caches.delete(k);
+              }
+            } catch (e) {}
+          }
+          window.location.reload();
+        }}
+        className="w-full flex items-center justify-center space-x-2 p-3 mb-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-neutral-300 text-xs font-semibold border border-white/10 transition active:scale-98 cursor-pointer"
+      >
+        <RefreshCw className="w-4 h-4 text-amber-400" />
+        <span>Sürümü Güncelle & Önbelleği Temizle</span>
+      </button>
+
       {/* Logout */}
       <button
         onClick={onLogout}

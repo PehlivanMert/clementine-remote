@@ -88,10 +88,18 @@ if os.path.exists(dist_dir):
 
     @app.get("/{full_path:path}")
     async def serve_spa(full_path: str):
+        no_cache_headers = {
+            "Cache-Control": "no-cache, no-store, must-revalidate",
+            "Pragma": "no-cache",
+            "Expires": "0"
+        }
         file_path = os.path.join(dist_dir, full_path)
         if os.path.isfile(file_path):
-            return FileResponse(file_path)
-        return FileResponse(os.path.join(dist_dir, "index.html"))
+            headers = no_cache_headers if (
+                full_path in ("sw.js", "manifest.webmanifest", "index.html") or full_path.endswith(".html")
+            ) else {}
+            return FileResponse(file_path, headers=headers)
+        return FileResponse(os.path.join(dist_dir, "index.html"), headers=no_cache_headers)
 else:
     @app.get("/")
     async def index():

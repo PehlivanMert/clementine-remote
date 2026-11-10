@@ -1,8 +1,6 @@
-// Clementine Web Remote Service Worker
-const CACHE_NAME = 'clementine-remote-v1';
+// Clementine Web Remote Service Worker — v2 (Audiophile Edition)
+const CACHE_NAME = 'clementine-remote-v2';
 const STATIC_ASSETS = [
-  '/',
-  '/index.html',
   '/manifest.webmanifest',
   '/icons/clementine-icon.svg',
   '/icons/icon-192.png',
@@ -22,11 +20,15 @@ self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((keys) => {
       return Promise.all(
-        keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key))
+        keys.map((key) => {
+          if (key !== CACHE_NAME) {
+            console.log('[SW] Purging outdated cache:', key);
+            return caches.delete(key);
+          }
+        })
       );
-    })
+    }).then(() => self.clients.claim())
   );
-  self.clients.claim();
 });
 
 self.addEventListener('fetch', (event) => {
@@ -38,7 +40,7 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // API calls: Network first, fall back to offline error
+  // 1. API calls: Network first, fall back to offline error
   if (url.pathname.startsWith('/api/')) {
     event.respondWith(
       fetch(request).catch(() => {
@@ -57,24 +59,34 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // App shell and static assets: Cache first with network fallback
+  // 2. Navigation & HTML: Always Network First for instantaneous updates on LAN Wi-Fi
+  if (request.mode === 'navigate' || url.pathname === '/' || url.pathname === '/index.html') {
+    event.respondWith(
+      fetch(request)
+        .then((networkResponse) => {
+          if (networkResponse && networkResponse.status === 200) {
+            const clone = networkResponse.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
+          }
+          return networkResponse;
+        })
+        .catch(() => caches.match('/index.html'))
+    );
+    return;
+  }
+
+  // 3. Static assets: Network first or cache match
   event.respondWith(
     caches.match(request).then((cachedResponse) => {
       if (cachedResponse) {
-        // Fetch fresh in background
-        fetch(request).then((networkResponse) => {
-          if (networkResponse && networkResponse.status === 200) {
-            caches.open(CACHE_NAME).then((cache) => cache.put(request, networkResponse));
-          }
-        }).catch(() => {});
         return cachedResponse;
       }
-
-      return fetch(request).catch(() => {
-        // If navigation request fails, return cached index.html
-        if (request.mode === 'navigate') {
-          return caches.match('/index.html');
+      return fetch(request).then((networkResponse) => {
+        if (networkResponse && networkResponse.status === 200 && url.pathname.startsWith('/assets/')) {
+          const clone = networkResponse.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
         }
+        return networkResponse;
       });
     })
   );

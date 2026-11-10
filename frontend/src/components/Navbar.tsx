@@ -19,7 +19,7 @@ export const Navbar: React.FC<NavbarProps> = ({ status, wsConnected, onOpenSyste
             <Radio className="w-4 h-4 landscape:w-3.5 landscape:h-3.5 text-black" />
           </div>
           <span className="font-semibold tracking-tight text-white text-base landscape:text-sm">Clementine</span>
-          <span className="text-[10px] uppercase font-bold tracking-widest px-1.5 py-0.5 rounded bg-white/10 text-neutral-400">Hi-Fi</span>
+          <span className="text-[10px] uppercase font-bold tracking-widest px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-300 border border-amber-500/25">Hi-Fi v1.1</span>
         </div>
 
         <button
