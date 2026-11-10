@@ -15,6 +15,30 @@ export interface TrackMetadata {
   filename?: string;
   url?: string;
   has_art?: boolean;
+  audio_format?: string;
+  bit_depth?: number;
+  sample_rate?: number;
+  bit_rate?: number;
+  is_hi_res?: boolean;
+}
+
+export interface LyricsLine {
+  time: number;
+  text: string;
+}
+
+export interface LyricsResponse {
+  synced: boolean;
+  lines: LyricsLine[];
+  plain: string;
+  source: string;
+}
+
+export interface SleepTimerStatus {
+  active: boolean;
+  remaining_seconds: number;
+  initial_volume: number;
+  is_fading: boolean;
 }
 
 export interface PlayerStatus {

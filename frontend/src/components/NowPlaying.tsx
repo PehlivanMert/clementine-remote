@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { PlayerStatus } from '../types';
 import { api } from '../api';
+import { AudiophileBadge } from './AudiophileBadge';
 
 interface NowPlayingProps {
   status: PlayerStatus | null;
@@ -104,7 +105,19 @@ export const NowPlaying: React.FC<NowPlayingProps> = ({ status }) => {
       {/* Album Artwork Frame with Glow */}
       <div className="relative flex-1 min-h-0 landscape:flex-initial landscape:h-full w-full flex items-center justify-center my-1 landscape:my-0 overflow-hidden">
         <div className="relative w-auto h-full max-h-[36vh] max-w-[76vw] landscape:max-h-[72vh] landscape:max-w-none aspect-square flex items-center justify-center">
-          <div className="absolute inset-0 bg-gradient-to-tr from-amber-500/10 to-orange-500/10 rounded-3xl blur-2xl transform scale-95" />
+          {/* Dynamic Ambient Album Art Glow */}
+          {currentTrack && (
+            <img
+              src={artUrl}
+              alt=""
+              aria-hidden="true"
+              className="absolute inset-0 w-full h-full object-cover rounded-3xl blur-2xl opacity-45 transform scale-110 pointer-events-none transition-opacity duration-700"
+              onError={(e) => {
+                (e.target as HTMLImageElement).style.display = 'none';
+              }}
+            />
+          )}
+          <div className="absolute inset-0 bg-gradient-to-tr from-amber-500/10 to-orange-500/10 rounded-3xl blur-2xl transform scale-95 pointer-events-none" />
           <div className="relative w-full h-full rounded-2xl overflow-hidden bg-hifi-800 shadow-2xl border border-white/10 flex items-center justify-center">
             {currentTrack ? (
               <img
@@ -138,6 +151,9 @@ export const NowPlaying: React.FC<NowPlayingProps> = ({ status }) => {
           <p className="text-xs landscape:text-[11px] text-neutral-400 truncate mt-0.5">
             {currentTrack?.album || 'Idle'}
           </p>
+          <div className="flex items-center justify-center landscape:justify-start mt-1.5">
+            <AudiophileBadge track={currentTrack} />
+          </div>
         </div>
 
         {/* Scrubber / Progress Bar */}
