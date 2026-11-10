@@ -7,7 +7,7 @@ import { LibraryView } from './components/LibraryView';
 import { SearchView } from './components/SearchView';
 import { SystemView } from './components/SystemView';
 import { LoginModal } from './components/LoginModal';
-import { PlayerStatus, PlaylistInfo, TrackMetadata } from './types';
+import { PlayerStatus, PlaylistInfo, TrackMetadata, SleepTimerStatus } from './types';
 import { useWebSocket } from './hooks/useWebSocket';
 import { api } from './api';
 
@@ -18,6 +18,7 @@ export const App: React.FC = () => {
   const [playlists, setPlaylists] = useState<PlaylistInfo[]>([]);
   const [selectedPlaylistId, setSelectedPlaylistId] = useState<number | null>(null);
   const [songs, setSongs] = useState<TrackMetadata[]>([]);
+  const [sleepTimer, setSleepTimer] = useState<SleepTimerStatus | null>(null);
 
   const selectedPlaylistIdRef = React.useRef<number | null>(selectedPlaylistId);
   selectedPlaylistIdRef.current = selectedPlaylistId;
@@ -50,6 +51,7 @@ export const App: React.FC = () => {
     try {
       const s = await api.getStatus();
       setStatus(s);
+      api.getSleepTimer().then(setSleepTimer).catch(() => {});
       const pls = await api.getPlaylists();
       setPlaylists(pls);
       const activePl = pls.find((p) => p.active) || pls[0];
@@ -101,6 +103,10 @@ export const App: React.FC = () => {
 
       case 'clementine_connection_changed':
         setStatus((prev) => (prev ? { ...prev, clementine_connected: data } : null));
+        break;
+
+      case 'sleep_timer_updated':
+        setSleepTimer(data);
         break;
 
       case 'active_playlist_changed':
@@ -291,7 +297,11 @@ export const App: React.FC = () => {
       {/* Main Content Area */}
       <main className="flex-1 main-content-layout safe-x flex flex-col min-h-0 overflow-y-auto">
         {currentTab === 'player' && (
-          <NowPlaying status={status} />
+          <NowPlaying
+            status={status}
+            sleepTimer={sleepTimer}
+            onTimerUpdate={setSleepTimer}
+          />
         )}
         {currentTab === 'queue' && (
           <PlaylistView

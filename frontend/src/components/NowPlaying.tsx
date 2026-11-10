@@ -13,22 +13,27 @@ import {
   Plus,
   Minus,
   Mic2,
+  Moon,
 } from 'lucide-react';
-import { PlayerStatus } from '../types';
+import { PlayerStatus, SleepTimerStatus } from '../types';
 import { api } from '../api';
 import { AudiophileBadge } from './AudiophileBadge';
 import { LyricsModal } from './LyricsModal';
+import { SleepTimerModal } from './SleepTimerModal';
 
 interface NowPlayingProps {
   status: PlayerStatus | null;
+  sleepTimer?: SleepTimerStatus | null;
+  onTimerUpdate?: (status: SleepTimerStatus) => void;
   onRefresh?: () => void;
 }
 
-export const NowPlaying: React.FC<NowPlayingProps> = ({ status }) => {
+export const NowPlaying: React.FC<NowPlayingProps> = ({ status, sleepTimer, onTimerUpdate }) => {
   const [seeking, setSeeking] = useState(false);
   const [seekVal, setSeekVal] = useState(0);
   const [artCacheBuster, setArtCacheBuster] = useState(Date.now());
   const [isLyricsOpen, setIsLyricsOpen] = useState(false);
+  const [isSleepModalOpen, setIsSleepModalOpen] = useState(false);
   const lastUnmutedVolume = useRef<number>(75);
   const seekLockTimer = useRef<number | null>(null);
 
@@ -167,6 +172,23 @@ export const NowPlaying: React.FC<NowPlayingProps> = ({ status }) => {
                 <span>Sözler</span>
               </button>
             )}
+            <button
+              onClick={() => setIsSleepModalOpen(true)}
+              className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium transition backdrop-blur-sm cursor-pointer active:scale-95 ${
+                sleepTimer?.active
+                  ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 shadow-sm animate-pulse'
+                  : 'text-neutral-300 hover:text-indigo-300 bg-white/5 hover:bg-indigo-500/15 border border-white/10 hover:border-indigo-500/30'
+              }`}
+              title="Uyku Zamanlayıcısı (Sleep Timer)"
+              aria-label="Uyku Zamanlayıcısı"
+            >
+              <Moon className="w-3 h-3 text-indigo-400" />
+              <span>
+                {sleepTimer?.active
+                  ? `${Math.floor(sleepTimer.remaining_seconds / 60)}:${(sleepTimer.remaining_seconds % 60).toString().padStart(2, '0')}`
+                  : 'Uyku'}
+              </span>
+            </button>
           </div>
         </div>
 
@@ -310,6 +332,46 @@ export const NowPlaying: React.FC<NowPlayingProps> = ({ status }) => {
               {status?.volume || 0}%
             </span>
           </div>
+
+          {/* Quick Volume Presets */}
+          <div className="flex items-center justify-between px-1 mt-1.5 text-[11px] text-neutral-400">
+            <span className="text-[10px] text-neutral-500 uppercase tracking-wider font-semibold">Ön Ayar</span>
+            <div className="flex items-center space-x-1.5">
+              <button
+                onClick={() => api.setVolume(20)}
+                className={`px-2 py-0.5 rounded-md text-[10px] font-mono transition cursor-pointer ${
+                  status?.volume === 20
+                    ? 'bg-indigo-500/30 text-indigo-300 border border-indigo-500/50'
+                    : 'bg-white/5 hover:bg-white/10 text-neutral-400 border border-white/5'
+                }`}
+                title="Gece / Dinlenme Seviyesi (%20)"
+              >
+                20% Gece
+              </button>
+              <button
+                onClick={() => api.setVolume(50)}
+                className={`px-2 py-0.5 rounded-md text-[10px] font-mono transition cursor-pointer ${
+                  status?.volume === 50
+                    ? 'bg-amber-500/30 text-amber-300 border border-amber-500/50'
+                    : 'bg-white/5 hover:bg-white/10 text-neutral-400 border border-white/5'
+                }`}
+                title="Günlük / Dengeli Seviye (%50)"
+              >
+                50% Günlük
+              </button>
+              <button
+                onClick={() => api.setVolume(88)}
+                className={`px-2 py-0.5 rounded-md text-[10px] font-mono transition cursor-pointer ${
+                  status?.volume === 88
+                    ? 'bg-amber-500/30 text-amber-300 border border-amber-500/50 font-bold'
+                    : 'bg-white/5 hover:bg-white/10 text-neutral-400 border border-white/5'
+                }`}
+                title="Harman Kardon Bit-Perfect AUX Seviyesi (%88 - Donanım Kırpılması Engelleme)"
+              >
+                88% HK AUX
+              </button>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -321,6 +383,16 @@ export const NowPlaying: React.FC<NowPlayingProps> = ({ status }) => {
         currentPosition={currentPos}
         onSeek={async (pos) => {
           await api.seek(Math.floor(pos));
+        }}
+      />
+
+      {/* Sleep Timer Modal */}
+      <SleepTimerModal
+        isOpen={isSleepModalOpen}
+        onClose={() => setIsSleepModalOpen(false)}
+        timerStatus={sleepTimer}
+        onTimerUpdate={(st) => {
+          onTimerUpdate?.(st);
         }}
       />
     </div>
