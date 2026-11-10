@@ -5,6 +5,7 @@ from . import remotecontrolmessages_pb2 as pb
 from .protocol import pack_message, AsyncMessageParser
 from ...models.player import PlayerStatus, TrackMetadata
 from ...models.playlist import PlaylistInfo
+from ...services.audio_meta_service import audio_meta_service
 from ...config import settings
 
 logger = logging.getLogger("clementine_client")
@@ -175,6 +176,14 @@ class ClementineClient:
                 url=raw.url if raw.HasField('url') else "",
                 has_art=bool(raw.art)
             )
+            file_meta = audio_meta_service.probe_file(track.filename or track.url)
+            if file_meta:
+                track.audio_format = file_meta.get("audio_format")
+                track.bit_depth = file_meta.get("bit_depth")
+                track.sample_rate = file_meta.get("sample_rate")
+                track.bit_rate = file_meta.get("bit_rate")
+                track.is_hi_res = file_meta.get("is_hi_res", False)
+
             self.status.current_track = track
             self.status.duration = raw.length
 

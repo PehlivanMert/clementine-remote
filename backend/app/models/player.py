@@ -18,6 +18,11 @@ class TrackMetadata(BaseModel):
     filename: Optional[str] = ""
     url: Optional[str] = ""
     has_art: bool = False
+    audio_format: Optional[str] = None
+    bit_depth: Optional[int] = None
+    sample_rate: Optional[int] = None
+    bit_rate: Optional[int] = None
+    is_hi_res: bool = False
 
 class PlayerStatus(BaseModel):
     state: str = "Idle"  # "Playing", "Paused", "Idle", "Empty"
