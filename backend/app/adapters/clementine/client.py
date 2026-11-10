@@ -386,22 +386,52 @@ class ClementineClient:
         await self.request_playlist_songs(target_pl)
 
     async def clear_playlist(self, playlist_id: Optional[int]):
-        """Clear all tracks from the specified playlist using RequestUpdatePlaylist."""
+        """Clear all tracks from the specified playlist using REMOVE_SONGS & RequestUpdatePlaylist."""
         target_pl = playlist_id if (playlist_id is not None and playlist_id > 0) else self.active_playlist_id
-        msg = pb.Message(version=23, type=pb.UPDATE_PLAYLIST)
-        req = msg.request_update_playlist
-        req.playlist_id = target_pl
-        req.clear_playlist = True
-        await self._send_message(msg)
 
-        # Optimistically update internal state and notify clients
-        if target_pl in self.playlist_songs:
-            self.playlist_songs[target_pl] = []
+        # Determine song indices to remove
+        cached_songs = self.playlist_songs.get(target_pl, [])
+        item_count = len(cached_songs)
+        if item_count == 0 and target_pl in self.playlists:
+            item_count = self.playlists[target_pl].item_count
+
+        # If cache is cold, request songs to make sure we know indices
+        if item_count == 0:
+            await self.request_playlist_songs(target_pl)
+            await asyncio.sleep(0.05)
+            cached_songs = self.playlist_songs.get(target_pl, [])
+            item_count = len(cached_songs)
+            if item_count == 0 and target_pl in self.playlists:
+                item_count = self.playlists[target_pl].item_count
+
+        # 1. Primary deletion: send REMOVE_SONGS with all song indices.
+        # This completely bypasses Clementine's C++ bug in PlaylistManager::Clear:
+        # 'if (playlists_.count() <= 1 || !playlists_.contains(id)) return;'
+        # which silently ignores clearing when only a single playlist is open in Clementine.
+        if item_count > 0:
+            indices = [s.index for s in cached_songs if s.index is not None] if cached_songs else list(range(item_count))
+            remove_msg = pb.Message(version=23, type=pb.REMOVE_SONGS)
+            remove_msg.request_remove_songs.playlist_id = target_pl
+            remove_msg.request_remove_songs.songs.extend(indices)
+            await self._send_message(remove_msg)
+
+        # 2. Also send UPDATE_PLAYLIST with clear_playlist = True (works in multi-playlist setups)
+        update_msg = pb.Message(version=23, type=pb.UPDATE_PLAYLIST)
+        update_msg.request_update_playlist.playlist_id = target_pl
+        update_msg.request_update_playlist.clear_playlist = True
+        await self._send_message(update_msg)
+
+        # 3. Optimistically update internal state and notify clients
+        self.playlist_songs[target_pl] = []
         if target_pl in self.playlists:
             self.playlists[target_pl].item_count = 0
         self._notify("playlist_songs_updated", {"playlist_id": target_pl, "songs": []})
         self._notify("playlists_updated", list(self.playlists.values()))
+
+        # Request authoritative ground truth from Clementine
+        await asyncio.sleep(0.05)
         await self.request_playlist_songs(target_pl)
+        await self.request_playlists()
 
     async def create_playlist(self, name: str):
         """Create a new playlist in Clementine using RequestUpdatePlaylist."""
@@ -470,19 +500,17 @@ class ClementineClient:
 
     async def update_playlist(self, playlist_id: Optional[int], new_name: Optional[str] = None, clear_playlist: bool = False, create_new_playlist: bool = False):
         target_pl = playlist_id if (playlist_id is not None and playlist_id > 0) else self.active_playlist_id
-        msg = pb.Message(version=23, type=pb.UPDATE_PLAYLIST)
-        req = msg.request_update_playlist
+        if clear_playlist:
+            await self.clear_playlist(target_pl)
         if create_new_playlist:
+            msg = pb.Message(version=23, type=pb.UPDATE_PLAYLIST)
+            req = msg.request_update_playlist
             req.create_new_playlist = True
             if new_name:
                 req.new_playlist_name = new_name
-        else:
-            req.playlist_id = target_pl
-            if new_name:
-                req.new_playlist_name = new_name
-            if clear_playlist:
-                req.clear_playlist = True
-        await self._send_message(msg)
+            await self._send_message(msg)
+        elif new_name:
+            await self.rename_playlist(target_pl, new_name)
 
     async def set_shuffle(self, mode: int):
         msg = pb.Message(version=23, type=pb.SHUFFLE)
