@@ -9,6 +9,7 @@ import { SystemView } from './components/SystemView';
 import { LoginModal } from './components/LoginModal';
 import { PlayerStatus, PlaylistInfo, TrackMetadata, SleepTimerStatus } from './types';
 import { useWebSocket } from './hooks/useWebSocket';
+import { useMediaSession } from './hooks/useMediaSession';
 import { api } from './api';
 
 export const App: React.FC = () => {
@@ -19,6 +20,9 @@ export const App: React.FC = () => {
   const [selectedPlaylistId, setSelectedPlaylistId] = useState<number | null>(null);
   const [songs, setSongs] = useState<TrackMetadata[]>([]);
   const [sleepTimer, setSleepTimer] = useState<SleepTimerStatus | null>(null);
+
+  // iOS Lock Screen Controls & Background Keepalive
+  useMediaSession(status);
 
   const selectedPlaylistIdRef = React.useRef<number | null>(selectedPlaylistId);
   selectedPlaylistIdRef.current = selectedPlaylistId;

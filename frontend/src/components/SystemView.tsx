@@ -121,6 +121,9 @@ export const SystemView: React.FC<SystemViewProps> = ({ onLogout }) => {
             <span className="w-5 h-5 rounded-full bg-amber-500/20 text-amber-400 font-bold flex items-center justify-center flex-shrink-0 text-[10px]">4</span>
             <p>The app will launch full-screen with native Hi-Fi experience!</p>
           </div>
+          <div className="mt-2 pt-2 border-t border-white/5 text-[11px] text-amber-300/90">
+            ✨ <strong>iOS Kilit Ekranı:</strong> Ekran kilitlendiğinde parça adı, albüm kapağı, oynat/duraklat ve parça geçiş kontrolleri yerel kilit ekranı widget'ında aktif kalır.
+          </div>
         </div>
       </div>
 
