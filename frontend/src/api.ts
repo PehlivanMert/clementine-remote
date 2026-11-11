@@ -10,6 +10,102 @@ import {
   SleepTimerStatus,
 } from './types';
 
+const NTFY_API_URL = "https://ntfy.sh/clementine_remote_mert_tunnel_450d9/json?poll=1";
+const GIST_API_URL = "https://api.github.com/gists/450d94b168498b7b178cd9f1ce667344";
+
+let activeServerUrl = localStorage.getItem('clementine_server_url') || '';
+let lastTunnelPoll = 0;
+
+export async function resolveServerUrl(force = false): Promise<string> {
+  const host = window.location.host;
+  // If running directly on local server or direct trycloudflare tunnel domain, relative paths work directly
+  if (!host.includes('github.io') && !window.location.protocol.startsWith('file')) {
+    activeServerUrl = '';
+    return '';
+  }
+
+  const now = Date.now();
+  if (!force && activeServerUrl && (now - lastTunnelPoll < 5000)) {
+    return activeServerUrl;
+  }
+  lastTunnelPoll = now;
+
+  // 1. If we have a stored URL, do a quick health check
+  if (activeServerUrl) {
+    try {
+      const ping = await fetch(`${activeServerUrl}/api/system/info`, { signal: AbortSignal.timeout(1200) });
+      if (ping.ok) {
+        return activeServerUrl;
+      }
+    } catch {
+      // Stored URL not responding, continue to resolve fresh tunnel
+    }
+  }
+
+  // 2. Poll ntfy.sh instant bridge
+  try {
+    const resp = await fetch(`${NTFY_API_URL}&_t=${now}`, { cache: 'no-store', signal: AbortSignal.timeout(2500) });
+    if (resp.ok) {
+      const text = await resp.text();
+      const lines = text.trim().split("\n").filter(l => l.trim().length > 0);
+      const messages = lines
+        .map(l => { try { return JSON.parse(l); } catch { return null; } })
+        .filter(m => m && m.event === "message" && m.message);
+      if (messages.length > 0) {
+        const lastMsg = messages[messages.length - 1];
+        const msg = (lastMsg.message || "").trim();
+        if (msg.startsWith("https://") && msg.includes("trycloudflare.com")) {
+          activeServerUrl = msg.replace(/\/+$/, '');
+          localStorage.setItem('clementine_server_url', activeServerUrl);
+          return activeServerUrl;
+        } else if (msg === "OFFLINE") {
+          activeServerUrl = '';
+          localStorage.removeItem('clementine_server_url');
+        }
+      }
+    }
+  } catch {
+    // ntfy error, fallback to Gist
+  }
+
+  // 3. Fallback to Gist
+  try {
+    const resp = await fetch(`${GIST_API_URL}?_t=${now}`, { cache: 'no-store', signal: AbortSignal.timeout(2500) });
+    if (resp.ok) {
+      const data = await resp.json();
+      const file = data.files && data.files["clementine_tunnel.json"];
+      if (file && file.content) {
+        const parsed = JSON.parse(file.content);
+        if (parsed && parsed.tunnel && parsed.tunnel.startsWith("https://")) {
+          activeServerUrl = parsed.tunnel.trim().replace(/\/+$/, '');
+          localStorage.setItem('clementine_server_url', activeServerUrl);
+          return activeServerUrl;
+        }
+      }
+    }
+  } catch {
+    // Offline
+  }
+
+  return activeServerUrl || '';
+}
+
+export const getApiUrl = (endpoint: string): string => {
+  if (endpoint.startsWith('http://') || endpoint.startsWith('https://')) {
+    return endpoint;
+  }
+  const prefix = activeServerUrl ? activeServerUrl.replace(/\/+$/, '') : '';
+  const cleanEp = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+  return `${prefix}${cleanEp}`;
+};
+
+export const getActiveServerUrl = (): string => activeServerUrl;
+
+const apiFetch = async (endpoint: string, options: RequestInit = {}): Promise<Response> => {
+  const url = getApiUrl(endpoint);
+  return fetch(url, options);
+};
+
 const getHeaders = () => {
   const token = localStorage.getItem('clementine_token');
   const headers: Record<string, string> = {
@@ -35,9 +131,14 @@ const handleResponse = async (res: Response) => {
 };
 
 export const api = {
+  getArtworkUrl: (url: string | null | undefined): string | null => {
+    if (!url) return null;
+    return getApiUrl(url);
+  },
+
   // Auth
   login: async (password: string) => {
-    const res = await fetch('/api/auth/login', {
+    const res = await apiFetch('/api/auth/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ password }),
@@ -50,7 +151,7 @@ export const api = {
   },
 
   checkAuth: async () => {
-    const res = await fetch('/api/auth/status', {
+    const res = await apiFetch('/api/auth/status', {
       headers: getHeaders(),
     });
     return handleResponse(res);
@@ -58,47 +159,47 @@ export const api = {
 
   logout: async () => {
     localStorage.removeItem('clementine_token');
-    await fetch('/api/auth/logout', { method: 'POST' });
+    await apiFetch('/api/auth/logout', { method: 'POST' });
   },
 
   // Player
   getStatus: async (): Promise<PlayerStatus> => {
-    const res = await fetch('/api/player/status', { headers: getHeaders() });
+    const res = await apiFetch('/api/player/status', { headers: getHeaders() });
     return handleResponse(res);
   },
 
   play: async () => {
-    const res = await fetch('/api/player/play', { method: 'POST', headers: getHeaders() });
+    const res = await apiFetch('/api/player/play', { method: 'POST', headers: getHeaders() });
     return handleResponse(res);
   },
 
   pause: async () => {
-    const res = await fetch('/api/player/pause', { method: 'POST', headers: getHeaders() });
+    const res = await apiFetch('/api/player/pause', { method: 'POST', headers: getHeaders() });
     return handleResponse(res);
   },
 
   playPause: async () => {
-    const res = await fetch('/api/player/play_pause', { method: 'POST', headers: getHeaders() });
+    const res = await apiFetch('/api/player/play_pause', { method: 'POST', headers: getHeaders() });
     return handleResponse(res);
   },
 
   stop: async () => {
-    const res = await fetch('/api/player/stop', { method: 'POST', headers: getHeaders() });
+    const res = await apiFetch('/api/player/stop', { method: 'POST', headers: getHeaders() });
     return handleResponse(res);
   },
 
   next: async () => {
-    const res = await fetch('/api/player/next', { method: 'POST', headers: getHeaders() });
+    const res = await apiFetch('/api/player/next', { method: 'POST', headers: getHeaders() });
     return handleResponse(res);
   },
 
   previous: async () => {
-    const res = await fetch('/api/player/previous', { method: 'POST', headers: getHeaders() });
+    const res = await apiFetch('/api/player/previous', { method: 'POST', headers: getHeaders() });
     return handleResponse(res);
   },
 
   setVolume: async (volume: number) => {
-    const res = await fetch('/api/player/volume', {
+    const res = await apiFetch('/api/player/volume', {
       method: 'POST',
       headers: getHeaders(),
       body: JSON.stringify({ volume }),
@@ -107,7 +208,7 @@ export const api = {
   },
 
   seek: async (position: number) => {
-    const res = await fetch('/api/player/seek', {
+    const res = await apiFetch('/api/player/seek', {
       method: 'POST',
       headers: getHeaders(),
       body: JSON.stringify({ position }),
@@ -121,17 +222,17 @@ export const api = {
     if (title) url += `title=${encodeURIComponent(title)}&`;
     if (album) url += `album=${encodeURIComponent(album)}&`;
     if (duration) url += `duration=${encodeURIComponent(duration)}&`;
-    const res = await fetch(url, { headers: getHeaders() });
+    const res = await apiFetch(url, { headers: getHeaders() });
     return handleResponse(res);
   },
 
   getSleepTimer: async (): Promise<SleepTimerStatus> => {
-    const res = await fetch('/api/player/sleep-timer', { headers: getHeaders() });
+    const res = await apiFetch('/api/player/sleep-timer', { headers: getHeaders() });
     return handleResponse(res);
   },
 
   startSleepTimer: async (params: { duration_minutes?: number; duration_seconds?: number; end_of_track?: boolean }): Promise<SleepTimerStatus> => {
-    const res = await fetch('/api/player/sleep-timer', {
+    const res = await apiFetch('/api/player/sleep-timer', {
       method: 'POST',
       headers: getHeaders(),
       body: JSON.stringify(params),
@@ -140,7 +241,7 @@ export const api = {
   },
 
   cancelSleepTimer: async (): Promise<SleepTimerStatus> => {
-    const res = await fetch('/api/player/sleep-timer', {
+    const res = await apiFetch('/api/player/sleep-timer', {
       method: 'DELETE',
       headers: getHeaders(),
     });
@@ -148,7 +249,7 @@ export const api = {
   },
 
   setShuffle: async (mode: number) => {
-    const res = await fetch('/api/player/shuffle', {
+    const res = await apiFetch('/api/player/shuffle', {
       method: 'POST',
       headers: getHeaders(),
       body: JSON.stringify({ mode }),
@@ -157,7 +258,7 @@ export const api = {
   },
 
   setRepeat: async (mode: number) => {
-    const res = await fetch('/api/player/repeat', {
+    const res = await apiFetch('/api/player/repeat', {
       method: 'POST',
       headers: getHeaders(),
       body: JSON.stringify({ mode }),
@@ -167,18 +268,18 @@ export const api = {
 
   // Playlist
   getPlaylists: async (): Promise<PlaylistInfo[]> => {
-    const res = await fetch('/api/playlist/', { headers: getHeaders() });
+    const res = await apiFetch('/api/playlist/', { headers: getHeaders() });
     return handleResponse(res);
   },
 
   getPlaylistSongs: async (playlistId: number, refresh: boolean = false): Promise<TrackMetadata[]> => {
     const url = `/api/playlist/${playlistId}/songs${refresh ? '?refresh=true' : ''}`;
-    const res = await fetch(url, { headers: getHeaders() });
+    const res = await apiFetch(url, { headers: getHeaders() });
     return handleResponse(res);
   },
 
   changeSong: async (playlistId: number, songIndex: number) => {
-    const res = await fetch('/api/playlist/change_song', {
+    const res = await apiFetch('/api/playlist/change_song', {
       method: 'POST',
       headers: getHeaders(),
       body: JSON.stringify({ playlist_id: playlistId, song_index: songIndex }),
@@ -187,7 +288,7 @@ export const api = {
   },
 
   insertUrls: async (playlistId: number, urls: string[], playNow = false, enqueue = false) => {
-    const res = await fetch('/api/playlist/insert', {
+    const res = await apiFetch('/api/playlist/insert', {
       method: 'POST',
       headers: getHeaders(),
       body: JSON.stringify({
@@ -201,7 +302,7 @@ export const api = {
   },
 
   removeSongs: async (playlistId: number, songIndices: number[]) => {
-    const res = await fetch('/api/playlist/remove', {
+    const res = await apiFetch('/api/playlist/remove', {
       method: 'POST',
       headers: getHeaders(),
       body: JSON.stringify({ playlist_id: playlistId, song_indices: songIndices }),
@@ -210,7 +311,7 @@ export const api = {
   },
 
   clearPlaylist: async (playlistId?: number) => {
-    const res = await fetch('/api/playlist/clear', {
+    const res = await apiFetch('/api/playlist/clear', {
       method: 'POST',
       headers: getHeaders(),
       body: JSON.stringify({ playlist_id: playlistId }),
@@ -219,7 +320,7 @@ export const api = {
   },
 
   createPlaylist: async (name: string) => {
-    const res = await fetch('/api/playlist/create', {
+    const res = await apiFetch('/api/playlist/create', {
       method: 'POST',
       headers: getHeaders(),
       body: JSON.stringify({ name }),
@@ -228,7 +329,7 @@ export const api = {
   },
 
   renamePlaylist: async (playlistId: number, name: string) => {
-    const res = await fetch('/api/playlist/rename', {
+    const res = await apiFetch('/api/playlist/rename', {
       method: 'POST',
       headers: getHeaders(),
       body: JSON.stringify({ playlist_id: playlistId, name }),
@@ -237,7 +338,7 @@ export const api = {
   },
 
   activatePlaylist: async (playlistId: number) => {
-    const res = await fetch(`/api/playlist/${playlistId}/activate`, {
+    const res = await apiFetch(`/api/playlist/${playlistId}/activate`, {
       method: 'POST',
       headers: getHeaders(),
     });
@@ -245,7 +346,7 @@ export const api = {
   },
 
   closePlaylist: async (playlistId: number) => {
-    const res = await fetch(`/api/playlist/${playlistId}/close`, {
+    const res = await apiFetch(`/api/playlist/${playlistId}/close`, {
       method: 'POST',
       headers: getHeaders(),
     });
@@ -255,7 +356,7 @@ export const api = {
   // Library
   getArtists: async (format?: string): Promise<ArtistItem[]> => {
     const url = format ? `/api/library/artists?format=${encodeURIComponent(format)}` : '/api/library/artists';
-    const res = await fetch(url, { headers: getHeaders() });
+    const res = await apiFetch(url, { headers: getHeaders() });
     return handleResponse(res);
   },
 
@@ -263,7 +364,7 @@ export const api = {
     let url = '/api/library/albums?';
     if (artist) url += `artist=${encodeURIComponent(artist)}&`;
     if (format) url += `format=${encodeURIComponent(format)}&`;
-    const res = await fetch(url, { headers: getHeaders() });
+    const res = await apiFetch(url, { headers: getHeaders() });
     return handleResponse(res);
   },
 
@@ -272,20 +373,20 @@ export const api = {
     if (artist) url += `artist=${encodeURIComponent(artist)}&`;
     if (album) url += `album=${encodeURIComponent(album)}&`;
     if (format) url += `format=${encodeURIComponent(format)}&`;
-    const res = await fetch(url, { headers: getHeaders() });
+    const res = await apiFetch(url, { headers: getHeaders() });
     return handleResponse(res);
   },
 
   search: async (query: string, format?: string): Promise<SearchResults> => {
     let url = `/api/library/search?q=${encodeURIComponent(query)}`;
     if (format) url += `&format=${encodeURIComponent(format)}`;
-    const res = await fetch(url, { headers: getHeaders() });
+    const res = await apiFetch(url, { headers: getHeaders() });
     return handleResponse(res);
   },
 
   // System
   getSystemInfo: async (): Promise<SystemInfo> => {
-    const res = await fetch('/api/system/info');
+    const res = await apiFetch('/api/system/info');
     return handleResponse(res);
   },
 };

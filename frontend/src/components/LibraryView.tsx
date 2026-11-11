@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { User, Disc, Play, Plus, ChevronRight, ArrowLeft } from 'lucide-react';
 import { ArtistItem, AlbumItem, TrackMetadata, PlaylistInfo } from '../types';
-import { api } from '../api';
+import { api, getApiUrl } from '../api';
 
 interface LibraryViewProps {
   activePlaylistId?: number;
@@ -140,7 +140,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({ activePlaylistId = 1, 
           <div className="w-24 h-24 rounded-xl bg-hifi-800 border border-white/10 overflow-hidden flex-shrink-0 flex items-center justify-center relative shadow-lg">
             {albumArtSrc ? (
               <img
-                src={`/api/artwork/file?path=${encodeURIComponent(albumArtSrc)}`}
+                src={getApiUrl(`/api/artwork/file?path=${encodeURIComponent(albumArtSrc)}`)}
                 alt={selectedAlbum.name}
                 className="w-full h-full object-cover"
                 onError={(e) => {
@@ -283,7 +283,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({ activePlaylistId = 1, 
         <div className="grid grid-cols-2 sm:grid-cols-3 landscape:grid-cols-4 md:grid-cols-4 lg:grid-cols-5 gap-3">
           {albums.map((album) => {
             const coverSrc = album.sample_track_url
-              ? `/api/artwork/file?path=${encodeURIComponent(album.sample_track_url)}&thumb=true`
+              ? getApiUrl(`/api/artwork/file?path=${encodeURIComponent(album.sample_track_url)}&thumb=true`)
               : null;
 
             return (

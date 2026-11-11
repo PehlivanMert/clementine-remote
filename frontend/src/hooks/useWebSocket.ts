@@ -19,12 +19,28 @@ export function useWebSocket(onMessage: MessageHandler) {
       return;
     }
 
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const host = window.location.host;
+    const activeServer = localStorage.getItem('clementine_server_url') || '';
+    let wsBase: string;
+    if (activeServer && (host.includes('github.io') || window.location.protocol.startsWith('file'))) {
+      try {
+        const cleanUrl = activeServer.replace(/\/+$/, '');
+        const urlObj = new URL(cleanUrl);
+        const wsProto = urlObj.protocol === 'https:' ? 'wss:' : 'ws:';
+        wsBase = `${wsProto}//${urlObj.host}`;
+      } catch {
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        wsBase = `${protocol}//${host}`;
+      }
+    } else {
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      wsBase = `${protocol}//${host}`;
+    }
+
     const token = localStorage.getItem('clementine_token');
     const wsUrl = token
-      ? `${protocol}//${host}/ws?token=${encodeURIComponent(token)}`
-      : `${protocol}//${host}/ws`;
+      ? `${wsBase}/ws?token=${encodeURIComponent(token)}`
+      : `${wsBase}/ws`;
 
     try {
       const ws = new WebSocket(wsUrl);

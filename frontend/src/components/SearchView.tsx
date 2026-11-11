@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Search, X, Plus, User, Disc, Music } from 'lucide-react';
 import { SearchResults, TrackMetadata, PlaylistInfo } from '../types';
-import { api } from '../api';
+import { api, getApiUrl } from '../api';
 
 interface SearchViewProps {
   activePlaylistId?: number;
@@ -198,7 +198,7 @@ export const SearchView: React.FC<SearchViewProps> = ({ activePlaylistId = 1, pl
               <div className="grid grid-cols-2 gap-2">
                 {results.albums.map((album) => {
                   const coverSrc = album.sample_track_url
-                    ? `/api/artwork/file?path=${encodeURIComponent(album.sample_track_url)}&thumb=true`
+                    ? getApiUrl(`/api/artwork/file?path=${encodeURIComponent(album.sample_track_url)}&thumb=true`)
                     : null;
 
                   return (
@@ -254,7 +254,7 @@ export const SearchView: React.FC<SearchViewProps> = ({ activePlaylistId = 1, pl
               <div className="space-y-1">
                 {results.tracks.map((track) => {
                   const artSrc = (track.filename || track.url)
-                    ? `/api/artwork/file?path=${encodeURIComponent(track.url || track.filename || '')}&thumb=true`
+                    ? getApiUrl(`/api/artwork/file?path=${encodeURIComponent(track.url || track.filename || '')}&thumb=true`)
                     : null;
 
                   return (

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Play, Trash2, Disc, AlertTriangle, Plus, Edit2, X, Radio, RefreshCw } from 'lucide-react';
 import { TrackMetadata, PlaylistInfo, PlayerStatus } from '../types';
-import { api } from '../api';
+import { api, getApiUrl } from '../api';
 
 interface PlaylistViewProps {
   playlist: PlaylistInfo | null;
@@ -299,7 +299,7 @@ export const PlaylistView: React.FC<PlaylistViewProps> = ({
           {songs.map((song, mapIndex) => {
             const isCurrent = playlist?.active && currentTrackIndex === song.index;
             const artSrc = (song.filename || song.url)
-              ? `/api/artwork/file?path=${encodeURIComponent(song.url || song.filename || '')}&thumb=true`
+              ? getApiUrl(`/api/artwork/file?path=${encodeURIComponent(song.url || song.filename || '')}&thumb=true`)
               : null;
 
             return (

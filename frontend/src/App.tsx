@@ -10,7 +10,7 @@ import { LoginModal } from './components/LoginModal';
 import { PlayerStatus, PlaylistInfo, TrackMetadata, SleepTimerStatus } from './types';
 import { useWebSocket } from './hooks/useWebSocket';
 import { useMediaSession } from './hooks/useMediaSession';
-import { api } from './api';
+import { api, resolveServerUrl } from './api';
 
 export const App: React.FC = () => {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => !!localStorage.getItem('clementine_token'));
@@ -33,18 +33,21 @@ export const App: React.FC = () => {
   const songsRef = React.useRef<TrackMetadata[]>(songs);
   songsRef.current = songs;
 
-  // Initial Auth Check
+  // Initial Auth Check & Tunnel/Server Endpoint Discovery
   useEffect(() => {
-    api.checkAuth()
-      .then((data) => {
+    const initApp = async () => {
+      await resolveServerUrl();
+      try {
+        const data = await api.checkAuth();
         setIsAuthenticated(data.authenticated);
         if (data.authenticated) {
           fetchInitialState();
         }
-      })
-      .catch(() => {
+      } catch {
         setIsAuthenticated(false);
-      });
+      }
+    };
+    initApp();
 
     const handleAuthReq = () => setIsAuthenticated(false);
     window.addEventListener('auth_required', handleAuthReq);

@@ -18,6 +18,7 @@ import argparse
 import json
 import logging
 import os
+import re
 import shutil
 import signal
 import socket
@@ -542,6 +543,35 @@ class ClementineLifecycleManager:
 
         logger.info("Web Remote browser closed.")
 
+    def start_tunnel(self) -> Optional[str]:
+        """Start Cloudflare Tunnel via tunnel_manager.sh and return public URL."""
+        tunnel_script = SCRIPT_DIR / "tunnel_manager.sh"
+        if not tunnel_script.is_file():
+            logger.warning("tunnel_manager.sh not found at %s", tunnel_script)
+            return None
+        logger.info("Starting Cloudflare Tunnel...")
+        try:
+            res = subprocess.run([str(tunnel_script), "start"], capture_output=True, text=True, timeout=30)
+            url_match = re.search(r"https://[^\s]+\.trycloudflare\.com", res.stdout)
+            if url_match:
+                tunnel_url = url_match.group(0)
+                logger.info("Cloudflare Tunnel active: %s", tunnel_url)
+                return tunnel_url
+        except Exception as e:
+            logger.error("Failed to start tunnel: %s", e)
+        return None
+
+    def stop_tunnel(self) -> None:
+        """Stop Cloudflare Tunnel via tunnel_manager.sh."""
+        tunnel_script = SCRIPT_DIR / "tunnel_manager.sh"
+        if not tunnel_script.is_file():
+            return
+        logger.info("Stopping Cloudflare Tunnel...")
+        try:
+            subprocess.run([str(tunnel_script), "stop"], timeout=10, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except Exception as e:
+            logger.error("Failed to stop tunnel: %s", e)
+
     def on_clementine_opened(self, verify_clementine: bool = False) -> None:
         """Handle Clementine opening event."""
         if self.is_active:
@@ -560,7 +590,10 @@ class ClementineLifecycleManager:
             self.is_active = False
             return
 
-        # 2. Retrieve iPhone URL from system info
+        # 2. Start Cloudflare Tunnel
+        tunnel_url = self.start_tunnel()
+
+        # 3. Retrieve iPhone URL from system info
         info = get_system_info(self.port)
         if info and "iphone_url" in info:
             iphone_url = info["iphone_url"]
@@ -568,12 +601,15 @@ class ClementineLifecycleManager:
             lan_ip = detect_fallback_lan_ip()
             iphone_url = f"http://{lan_ip}:{self.port}"
 
-        # 3. Open Browser
+        # 4. Open Browser
         self.open_browser()
 
-        # 4. Notify Desktop
+        # 5. Notify Desktop
         notification_title = "Clementine Web Remote"
-        notification_body = f"Clementine açıldı, Web Remote aktif!\niPhone URL: {iphone_url}"
+        if tunnel_url:
+            notification_body = f"Clementine açıldı, Web Remote aktif!\nWiFi: {iphone_url}\nTünel (Mobil): {tunnel_url}"
+        else:
+            notification_body = f"Clementine açıldı, Web Remote aktif!\niPhone URL: {iphone_url}"
         send_notification(notification_title, notification_body)
 
     def on_clementine_closed(self, force: bool = False) -> None:
@@ -591,12 +627,15 @@ class ClementineLifecycleManager:
         # 1. Close Browser
         self.close_browser()
 
-        # 2. Stop Server
+        # 2. Stop Tunnel
+        self.stop_tunnel()
+
+        # 3. Stop Server
         self.stop_server()
 
-        # 3. Notify Desktop
+        # 4. Notify Desktop
         notification_title = "Clementine Web Remote"
-        notification_body = "Clementine kapandı, Web Remote durduruldu."
+        notification_body = "Clementine kapandı, Web Remote ve Tünel durduruldu."
         send_notification(notification_title, notification_body)
 
     def sync(self) -> None:
@@ -655,6 +694,15 @@ class ClementineLifecycleManager:
             except Exception:
                 pass
 
+        tunnel_url = None
+        tunnel_script = SCRIPT_DIR / "tunnel_manager.sh"
+        if tunnel_script.is_file():
+            try:
+                res = subprocess.run([str(tunnel_script), "get-url"], capture_output=True, text=True, timeout=2)
+                tunnel_url = res.stdout.strip() or None
+            except Exception:
+                pass
+
         return {
             "clementine_running": clem_pid is not None,
             "clementine_pid": clem_pid,
@@ -662,6 +710,7 @@ class ClementineLifecycleManager:
             "server_pid": server_pid,
             "server_port": self.port,
             "server_info": info,
+            "tunnel_url": tunnel_url,
             "browser_running": browser_running,
             "browser_pid": browser_pid,
             "browser_profile": str(BROWSER_PROFILE_DIR),

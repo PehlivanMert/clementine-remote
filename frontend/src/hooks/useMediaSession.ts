@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { PlayerStatus } from '../types';
-import { api } from '../api';
+import { api, getApiUrl } from '../api';
 
 export function useMediaSession(status: PlayerStatus | null) {
   const silentAudioRef = useRef<HTMLAudioElement | null>(null);
@@ -131,7 +131,8 @@ export function useMediaSession(status: PlayerStatus | null) {
     if (trackTitle || trackArtist) {
       const origin = typeof window !== 'undefined' ? window.location.origin : '';
       const artBuster = encodeURIComponent(`${trackArtist}-${trackTitle}`);
-      const artworkUrl = `${origin}/api/artwork/current?t=${artBuster}`;
+      const rawArt = getApiUrl(`/api/artwork/current?t=${artBuster}`);
+      const artworkUrl = rawArt.startsWith('http') ? rawArt : `${origin}${rawArt}`;
 
       const metadataObj = {
         title: trackTitle || 'Clementine Player',

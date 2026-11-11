@@ -16,7 +16,7 @@ import {
   Moon,
 } from 'lucide-react';
 import { PlayerStatus, SleepTimerStatus } from '../types';
-import { api } from '../api';
+import { api, getApiUrl } from '../api';
 import { AudiophileBadge } from './AudiophileBadge';
 import { LyricsModal } from './LyricsModal';
 import { SleepTimerModal } from './SleepTimerModal';
@@ -105,7 +105,7 @@ export const NowPlaying: React.FC<NowPlayingProps> = ({ status, sleepTimer, onTi
   };
 
   const artUrl = currentTrack
-    ? `/api/artwork/current?t=${artCacheBuster}`
+    ? getApiUrl(`/api/artwork/current?t=${artCacheBuster}`)
     : '/icons/clementine-icon.svg';
 
   return (
