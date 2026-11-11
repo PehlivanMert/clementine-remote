@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Navbar } from './components/Navbar';
 import { TabBar, TabType } from './components/TabBar';
 import { NowPlaying } from './components/NowPlaying';
+import { OfflineView } from './components/OfflineView';
 import { PlaylistView } from './components/PlaylistView';
 import { LibraryView } from './components/LibraryView';
 import { SearchView } from './components/SearchView';
@@ -53,6 +54,23 @@ export const App: React.FC = () => {
     window.addEventListener('auth_required', handleAuthReq);
     return () => window.removeEventListener('auth_required', handleAuthReq);
   }, []);
+
+  // Save last played track to localStorage for persistent offline memory
+  useEffect(() => {
+    if (status?.current_track && status.current_track.title) {
+      try {
+        localStorage.setItem(
+          'clementine_last_track',
+          JSON.stringify({
+            track: status.current_track,
+            savedAt: Date.now(),
+          })
+        );
+      } catch {
+        // quota
+      }
+    }
+  }, [status?.current_track]);
 
   const fetchInitialState = async () => {
     try {
@@ -170,6 +188,26 @@ export const App: React.FC = () => {
   }, []);
 
   const { isConnected: wsConnected } = useWebSocket(handleWsEvent);
+
+  // Auto-poll when disconnected to smoothly recover when Clementine starts
+  useEffect(() => {
+    if (wsConnected && status?.clementine_connected) return;
+
+    const interval = setInterval(async () => {
+      try {
+        await resolveServerUrl();
+        const s = await api.getStatus();
+        if (s && s.clementine_connected) {
+          setStatus(s);
+          fetchInitialState();
+        }
+      } catch {
+        // Still offline, retry next cycle
+      }
+    }, 3500);
+
+    return () => clearInterval(interval);
+  }, [wsConnected, status?.clementine_connected]);
 
   const activePlaylist = playlists.find((p) => p.active) || playlists[0] || null;
   const currentViewedPlaylist = playlists.find((p) => p.id === selectedPlaylistId) || activePlaylist;
@@ -304,11 +342,20 @@ export const App: React.FC = () => {
       {/* Main Content Area */}
       <main className="flex-1 main-content-layout safe-x flex flex-col min-h-0 overflow-y-auto">
         {currentTab === 'player' && (
-          <NowPlaying
-            status={status}
-            sleepTimer={sleepTimer}
-            onTimerUpdate={setSleepTimer}
-          />
+          (!wsConnected || !status?.clementine_connected) ? (
+            <OfflineView
+              wsConnected={wsConnected}
+              status={status}
+              onRetry={fetchInitialState}
+              onBrowseLibrary={() => setCurrentTab('queue')}
+            />
+          ) : (
+            <NowPlaying
+              status={status}
+              sleepTimer={sleepTimer}
+              onTimerUpdate={setSleepTimer}
+            />
+          )
         )}
         {currentTab === 'queue' && (
           <PlaylistView
