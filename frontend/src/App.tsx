@@ -342,7 +342,7 @@ export const App: React.FC = () => {
       {/* Main Content Area */}
       <main className="flex-1 main-content-layout safe-x flex flex-col min-h-0 overflow-y-auto">
         {currentTab === 'player' && (
-          (!wsConnected || !status?.clementine_connected) ? (
+          (window.location.search.includes('offline=true') || !wsConnected || !status?.clementine_connected) ? (
             <OfflineView
               wsConnected={wsConnected}
               status={status}
