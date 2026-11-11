@@ -2,48 +2,48 @@ import { useEffect, useRef } from 'react';
 import { PlayerStatus } from '../types';
 import { api } from '../api';
 
-// 1-second silent WAV data URI for iOS Safari AudioSession keepalive
-const SILENT_AUDIO_URI =
-  'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA';
-
 export function useMediaSession(status: PlayerStatus | null) {
   const silentAudioRef = useRef<HTMLAudioElement | null>(null);
 
-  // Initialize silent audio element for iOS Safari background wakefulness
+  // Initialize and maintain silent audio element for iOS Safari background wakefulness
   useEffect(() => {
     if (typeof window === 'undefined' || typeof document === 'undefined') return;
 
     if (!silentAudioRef.current) {
-      const audio = new Audio(SILENT_AUDIO_URI);
+      const audio = new Audio('/silence.mp3');
       audio.loop = true;
-      audio.volume = 0.001; // virtually inaudible
+      audio.preload = 'auto';
+      audio.setAttribute('playsinline', 'true');
+      audio.setAttribute('webkit-playsinline', 'true');
+      audio.setAttribute('x-webkit-airplay', 'allow');
+      audio.volume = 0.01; // Audible to media system, silent to human ear
       silentAudioRef.current = audio;
     }
 
     const audio = silentAudioRef.current;
 
-    // First user gesture primes audio playback
-    const primeAudio = () => {
-      if (audio && audio.paused && status?.state === 'Playing') {
+    // Attach interaction handlers to unlock and resume audio on ANY user tap
+    const handleInteraction = () => {
+      if (audio && status?.state === 'Playing' && audio.paused) {
         try {
           const p = audio.play();
           if (p && typeof p.catch === 'function') p.catch(() => {});
         } catch (e) {}
       }
-      window.removeEventListener('click', primeAudio);
-      window.removeEventListener('touchstart', primeAudio);
     };
 
-    window.addEventListener('click', primeAudio, { once: true });
-    window.addEventListener('touchstart', primeAudio, { once: true });
+    window.addEventListener('click', handleInteraction, { passive: true });
+    window.addEventListener('touchstart', handleInteraction, { passive: true });
+    window.addEventListener('pointerdown', handleInteraction, { passive: true });
 
     return () => {
-      window.removeEventListener('click', primeAudio);
-      window.removeEventListener('touchstart', primeAudio);
+      window.removeEventListener('click', handleInteraction);
+      window.removeEventListener('touchstart', handleInteraction);
+      window.removeEventListener('pointerdown', handleInteraction);
     };
   }, [status?.state]);
 
-  // Sync silent audio playing state
+  // Sync silent audio playing state with Clementine status
   useEffect(() => {
     const audio = silentAudioRef.current;
     if (!audio) return;
@@ -71,11 +71,13 @@ export function useMediaSession(status: PlayerStatus | null) {
 
     // Update metadata
     if (currentTrack) {
-      const artworkUrl = `${window.location.origin}/api/artwork/current`;
+      const origin = typeof window !== 'undefined' ? window.location.origin : '';
+      const artBuster = encodeURIComponent(`${currentTrack.artist}-${currentTrack.title}`);
+      const artworkUrl = `${origin}/api/artwork/current?t=${artBuster}`;
 
       const metadataObj = {
         title: currentTrack.title || 'Clementine Player',
-        artist: currentTrack.artist || 'Bilinmeyen Sanatçı',
+        artist: currentTrack.artist || 'Clementine',
         album: currentTrack.album || '',
         artwork: [
           { src: artworkUrl, sizes: '96x96', type: 'image/jpeg' },
@@ -110,30 +112,51 @@ export function useMediaSession(status: PlayerStatus | null) {
       'setPositionState' in navigator.mediaSession &&
       typeof navigator.mediaSession.setPositionState === 'function' &&
       status?.duration &&
-      status.duration > 0
+      status.duration > 0 &&
+      typeof status?.position === 'number' &&
+      status.position >= 0
     ) {
       try {
         navigator.mediaSession.setPositionState({
           duration: status.duration,
-          playbackRate: 1.0,
-          position: Math.min(status.position, status.duration),
+          playbackRate: isPlaying ? 1.0 : 0.0,
+          position: Math.min(Math.max(0, status.position), status.duration),
         });
-      } catch (e) {
-        // Ignore potential position bounds errors
-      }
+      } catch (e) {}
     }
 
-    // Set action handlers
+    // Action handlers with direct playback sync
     const actionHandlers: [MediaSessionAction, MediaSessionActionHandler][] = [
-      ['play', () => api.play()],
-      ['pause', () => api.pause()],
-      ['previoustrack', () => api.previous()],
-      ['nexttrack', () => api.next()],
+      [
+        'play',
+        async () => {
+          await api.play();
+          if (silentAudioRef.current) {
+            try {
+              const p = silentAudioRef.current.play();
+              if (p && typeof p.catch === 'function') p.catch(() => {});
+            } catch (e) {}
+          }
+        },
+      ],
+      [
+        'pause',
+        async () => {
+          await api.pause();
+          if (silentAudioRef.current) {
+            try {
+              silentAudioRef.current.pause();
+            } catch (e) {}
+          }
+        },
+      ],
+      ['previoustrack', async () => api.previous()],
+      ['nexttrack', async () => api.next()],
       [
         'seekto',
-        (details) => {
+        async (details) => {
           if (details.seekTime !== undefined && details.seekTime !== null) {
-            api.seek(Math.floor(details.seekTime));
+            await api.seek(Math.floor(details.seekTime));
           }
         },
       ],
@@ -142,9 +165,7 @@ export function useMediaSession(status: PlayerStatus | null) {
     actionHandlers.forEach(([action, handler]) => {
       try {
         navigator.mediaSession.setActionHandler(action, handler);
-      } catch (error) {
-        // Some browsers do not support all media actions
-      }
+      } catch (error) {}
     });
 
     return () => {

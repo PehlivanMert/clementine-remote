@@ -86,7 +86,7 @@ dist_dir = settings.FRONTEND_DIST_DIR
 if os.path.exists(dist_dir):
     app.mount("/assets", StaticFiles(directory=os.path.join(dist_dir, "assets")), name="assets")
 
-    @app.get("/{full_path:path}")
+    @app.api_route("/{full_path:path}", methods=["GET", "HEAD"])
     async def serve_spa(full_path: str):
         no_cache_headers = {
             "Cache-Control": "no-cache, no-store, must-revalidate",
@@ -101,7 +101,7 @@ if os.path.exists(dist_dir):
             return FileResponse(file_path, headers=headers)
         return FileResponse(os.path.join(dist_dir, "index.html"), headers=no_cache_headers)
 else:
-    @app.get("/")
+    @app.api_route("/", methods=["GET", "HEAD"])
     async def index():
         return {
             "name": settings.PROJECT_NAME,

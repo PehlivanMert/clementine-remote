@@ -132,4 +132,45 @@ describe('LyricsModal Component', () => {
     fireEvent.click(closeBtn);
     expect(onClose).toHaveBeenCalledTimes(1);
   });
+
+  it('supports interactive sync calibration offset and persists to localStorage', async () => {
+    vi.mocked(api.getLyrics).mockResolvedValueOnce({
+      synced: true,
+      lines: [
+        { time: 10.0, text: 'First line' },
+        { time: 15.0, text: 'Second line' },
+      ],
+      plain: '',
+      source: 'lrclib',
+    });
+
+    const onSeek = vi.fn();
+    render(
+      <LyricsModal
+        isOpen={true}
+        onClose={vi.fn()}
+        currentTrack={mockTrack}
+        currentPosition={10.0}
+        isPlaying={true}
+        onSeek={onSeek}
+      />
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('Senkron Kalibrasyonu')).toBeInTheDocument();
+    });
+
+    // Initial offset button displays +0.0s or 0.0s
+    expect(screen.getByTitle('Sıfırla')).toHaveTextContent('0.0s');
+
+    // Click +0.5s button
+    const plusBtn = screen.getByTitle('Sözleri 0.5 saniye geciktir');
+    fireEvent.click(plusBtn);
+    expect(screen.getByTitle('Sıfırla')).toHaveTextContent('+0.5s');
+
+    // Click -0.5s button
+    const minusBtn = screen.getByTitle('Sözleri 0.5 saniye erkene al');
+    fireEvent.click(minusBtn);
+    expect(screen.getByTitle('Sıfırla')).toHaveTextContent('0.0s');
+  });
 });

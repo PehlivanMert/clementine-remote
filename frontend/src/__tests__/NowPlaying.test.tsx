@@ -93,4 +93,23 @@ describe('NowPlaying Component', () => {
     const volumeSection = container.querySelector('.mb-5');
     expect(volumeSection).toBeInTheDocument();
   });
+
+  it('renders modern spacious presets without "Ön Ayar" text and includes ambient glow', () => {
+    render(<NowPlaying status={mockStatus} />);
+
+    // 'Ön Ayar' label should NOT exist
+    expect(screen.queryByText(/ön ayar/i)).not.toBeInTheDocument();
+
+    // The 3 preset buttons must be rendered and functional
+    const nightBtn = screen.getByText('20% Gece');
+    const dayBtn = screen.getByText('50% Günlük');
+    const hkBtn = screen.getByText('88% HK AUX');
+
+    expect(nightBtn).toBeInTheDocument();
+    expect(dayBtn).toBeInTheDocument();
+    expect(hkBtn).toBeInTheDocument();
+
+    fireEvent.click(hkBtn);
+    expect(api.setVolume).toHaveBeenCalledWith(88);
+  });
 });

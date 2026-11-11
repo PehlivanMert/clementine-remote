@@ -109,23 +109,27 @@ export const NowPlaying: React.FC<NowPlayingProps> = ({ status, sleepTimer, onTi
     : '/icons/clementine-icon.svg';
 
   return (
-    <div className="w-full max-w-sm landscape:max-w-4xl mx-auto h-full flex flex-col landscape:flex-row items-center justify-between landscape:justify-center landscape:items-center px-4 py-2 select-none landscape:gap-8 flex-1">
-      {/* Album Artwork Frame with Glow */}
-      <div className="relative flex-1 min-h-0 landscape:flex-initial landscape:h-full w-full flex items-center justify-center my-1 landscape:my-0 overflow-hidden">
+    <div className="w-full max-w-md landscape:max-w-4xl mx-auto h-full flex flex-col landscape:flex-row items-center justify-between landscape:justify-center landscape:items-center px-4 py-2 select-none landscape:gap-8 flex-1">
+      {/* Album Artwork Frame with Ambient Glow */}
+      <div className="relative flex-1 min-h-0 landscape:flex-initial landscape:h-full w-full flex items-center justify-center my-1 landscape:my-0">
         <div className="relative w-auto h-full max-h-[36vh] max-w-[76vw] landscape:max-h-[72vh] landscape:max-w-none aspect-square flex items-center justify-center">
-          {/* Dynamic Ambient Album Art Glow */}
+          {/* Vibrant Multi-Layer Ambient Glow (diffuses into background, visible even on dark covers) */}
           {currentTrack && (
-            <img
-              src={artUrl}
-              alt=""
+            <div
               aria-hidden="true"
-              className="absolute inset-0 w-full h-full object-cover rounded-3xl blur-2xl opacity-45 transform scale-110 pointer-events-none transition-opacity duration-700"
-              onError={(e) => {
-                (e.target as HTMLImageElement).style.display = 'none';
-              }}
-            />
+              className="absolute -inset-6 pointer-events-none transition-all duration-1000 ease-out"
+            >
+              <img
+                src={artUrl}
+                alt=""
+                className="w-full h-full object-cover rounded-3xl blur-3xl opacity-80 transform scale-135 saturate-[2.5] contrast-125 transition-opacity duration-700"
+                onError={(e) => {
+                  (e.target as HTMLImageElement).style.display = 'none';
+                }}
+              />
+              <div className="absolute inset-0 bg-gradient-to-tr from-amber-500/35 via-orange-500/25 to-rose-500/20 rounded-full blur-3xl transform scale-115 pointer-events-none animate-pulse duration-[8000ms]" />
+            </div>
           )}
-          <div className="absolute inset-0 bg-gradient-to-tr from-amber-500/10 to-orange-500/10 rounded-3xl blur-2xl transform scale-95 pointer-events-none" />
           <div className="relative w-full h-full rounded-2xl overflow-hidden bg-hifi-800 shadow-2xl border border-white/10 flex items-center justify-center">
             {currentTrack ? (
               <img
@@ -159,30 +163,36 @@ export const NowPlaying: React.FC<NowPlayingProps> = ({ status, sleepTimer, onTi
           <p className="text-xs landscape:text-[11px] text-neutral-400 truncate mt-0.5">
             {currentTrack?.album || 'Idle'}
           </p>
-          <div className="flex items-center justify-center landscape:justify-start gap-2 mt-1.5 flex-wrap">
+
+          {/* Row 1: Audiophile Hi-Res / Lossless Badge */}
+          <div className="flex items-center justify-center landscape:justify-start mt-2">
             <AudiophileBadge track={currentTrack} />
+          </div>
+
+          {/* Row 2: Action Pills (Lyrics & Sleep Timer) - side by side with zero awkward wrapping */}
+          <div className="flex items-center justify-center landscape:justify-start gap-2.5 mt-2">
             {currentTrack && (
               <button
                 onClick={() => setIsLyricsOpen(true)}
-                className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium text-neutral-300 hover:text-amber-300 bg-white/5 hover:bg-amber-500/15 border border-white/10 hover:border-amber-500/30 transition backdrop-blur-sm cursor-pointer active:scale-95"
+                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium text-neutral-200 hover:text-amber-300 bg-white/5 hover:bg-amber-500/15 border border-white/10 hover:border-amber-500/30 transition shadow-sm backdrop-blur-sm cursor-pointer active:scale-95"
                 title="Şarkı Sözleri (Lyrics)"
                 aria-label="Şarkı Sözlerini Aç"
               >
-                <Mic2 className="w-3 h-3 text-amber-400" />
+                <Mic2 className="w-3.5 h-3.5 text-amber-400" />
                 <span>Sözler</span>
               </button>
             )}
             <button
               onClick={() => setIsSleepModalOpen(true)}
-              className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium transition backdrop-blur-sm cursor-pointer active:scale-95 ${
+              className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium transition shadow-sm backdrop-blur-sm cursor-pointer active:scale-95 ${
                 sleepTimer?.active
-                  ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 shadow-sm animate-pulse'
-                  : 'text-neutral-300 hover:text-indigo-300 bg-white/5 hover:bg-indigo-500/15 border border-white/10 hover:border-indigo-500/30'
+                  ? 'bg-indigo-500/25 text-indigo-200 border border-indigo-500/40 animate-pulse'
+                  : 'text-neutral-200 hover:text-indigo-300 bg-white/5 hover:bg-indigo-500/15 border border-white/10 hover:border-indigo-500/30'
               }`}
               title="Uyku Zamanlayıcısı (Sleep Timer)"
               aria-label="Uyku Zamanlayıcısı"
             >
-              <Moon className="w-3 h-3 text-indigo-400" />
+              <Moon className="w-3.5 h-3.5 text-indigo-400" />
               <span>
                 {sleepTimer?.active
                   ? `${Math.floor(sleepTimer.remaining_seconds / 60)}:${(sleepTimer.remaining_seconds % 60).toString().padStart(2, '0')}`
@@ -333,44 +343,41 @@ export const NowPlaying: React.FC<NowPlayingProps> = ({ status, sleepTimer, onTi
             </span>
           </div>
 
-          {/* Quick Volume Presets */}
-          <div className="flex items-center justify-between px-1 mt-1.5 text-[11px] text-neutral-400">
-            <span className="text-[10px] text-neutral-500 uppercase tracking-wider font-semibold">Ön Ayar</span>
-            <div className="flex items-center space-x-1.5">
-              <button
-                onClick={() => api.setVolume(20)}
-                className={`px-2 py-0.5 rounded-md text-[10px] font-mono transition cursor-pointer ${
-                  status?.volume === 20
-                    ? 'bg-indigo-500/30 text-indigo-300 border border-indigo-500/50'
-                    : 'bg-white/5 hover:bg-white/10 text-neutral-400 border border-white/5'
-                }`}
-                title="Gece / Dinlenme Seviyesi (%20)"
-              >
-                20% Gece
-              </button>
-              <button
-                onClick={() => api.setVolume(50)}
-                className={`px-2 py-0.5 rounded-md text-[10px] font-mono transition cursor-pointer ${
-                  status?.volume === 50
-                    ? 'bg-amber-500/30 text-amber-300 border border-amber-500/50'
-                    : 'bg-white/5 hover:bg-white/10 text-neutral-400 border border-white/5'
-                }`}
-                title="Günlük / Dengeli Seviye (%50)"
-              >
-                50% Günlük
-              </button>
-              <button
-                onClick={() => api.setVolume(88)}
-                className={`px-2 py-0.5 rounded-md text-[10px] font-mono transition cursor-pointer ${
-                  status?.volume === 88
-                    ? 'bg-amber-500/30 text-amber-300 border border-amber-500/50 font-bold'
-                    : 'bg-white/5 hover:bg-white/10 text-neutral-400 border border-white/5'
-                }`}
-                title="Harman Kardon Bit-Perfect AUX Seviyesi (%88 - Donanım Kırpılması Engelleme)"
-              >
-                88% HK AUX
-              </button>
-            </div>
+          {/* Quick Volume Presets (Spacious modern pills, no 'Ön Ayar' label) */}
+          <div className="grid grid-cols-3 gap-2 px-1 mt-3">
+            <button
+              onClick={() => api.setVolume(20)}
+              className={`py-1 px-2 rounded-xl text-xs font-mono text-center transition cursor-pointer backdrop-blur-sm ${
+                status?.volume === 20
+                  ? 'bg-indigo-500/30 text-indigo-200 border border-indigo-500/50 shadow-sm shadow-indigo-500/20'
+                  : 'bg-white/5 hover:bg-white/10 text-neutral-400 hover:text-neutral-200 border border-white/5'
+              }`}
+              title="Gece / Dinlenme Seviyesi (%20)"
+            >
+              20% Gece
+            </button>
+            <button
+              onClick={() => api.setVolume(50)}
+              className={`py-1 px-2 rounded-xl text-xs font-mono text-center transition cursor-pointer backdrop-blur-sm ${
+                status?.volume === 50
+                  ? 'bg-amber-500/30 text-amber-200 border border-amber-500/50 shadow-sm shadow-amber-500/20'
+                  : 'bg-white/5 hover:bg-white/10 text-neutral-400 hover:text-neutral-200 border border-white/5'
+              }`}
+              title="Günlük / Dengeli Seviye (%50)"
+            >
+              50% Günlük
+            </button>
+            <button
+              onClick={() => api.setVolume(88)}
+              className={`py-1 px-2 rounded-xl text-xs font-mono text-center transition cursor-pointer backdrop-blur-sm ${
+                status?.volume === 88
+                  ? 'bg-amber-500/30 text-amber-200 border border-amber-500/50 font-bold shadow-sm shadow-amber-500/20'
+                  : 'bg-white/5 hover:bg-white/10 text-neutral-400 hover:text-neutral-200 border border-white/5'
+              }`}
+              title="Harman Kardon Bit-Perfect AUX Seviyesi (%88 - Donanım Kırpılması Engelleme)"
+            >
+              88% HK AUX
+            </button>
           </div>
         </div>
       </div>
@@ -381,6 +388,7 @@ export const NowPlaying: React.FC<NowPlayingProps> = ({ status, sleepTimer, onTi
         onClose={() => setIsLyricsOpen(false)}
         currentTrack={currentTrack}
         currentPosition={currentPos}
+        isPlaying={isPlaying}
         onSeek={async (pos) => {
           await api.seek(Math.floor(pos));
         }}
