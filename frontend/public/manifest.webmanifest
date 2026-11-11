@@ -2,26 +2,27 @@
   "name": "Clementine Web Remote",
   "short_name": "Clementine",
   "description": "Premium Dark Hi-Fi Web Remote for Clementine Music Player",
-  "start_url": "./",
-  "scope": "./",
+  "id": "/clementine-remote/",
+  "start_url": "/clementine-remote/",
+  "scope": "/clementine-remote/",
   "display": "standalone",
   "orientation": "any",
   "background_color": "#0c0d10",
   "theme_color": "#0c0d10",
   "icons": [
     {
-      "src": "./icons/clementine-icon.svg",
+      "src": "/clementine-remote/icons/clementine-icon.svg",
       "sizes": "any",
       "type": "image/svg+xml",
       "purpose": "any maskable"
     },
     {
-      "src": "./icons/icon-192.png",
+      "src": "/clementine-remote/icons/icon-192.png",
       "sizes": "192x192",
       "type": "image/png"
     },
     {
-      "src": "./icons/icon-512.png",
+      "src": "/clementine-remote/icons/icon-512.png",
       "sizes": "512x512",
       "type": "image/png"
     }

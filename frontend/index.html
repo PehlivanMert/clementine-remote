@@ -6,6 +6,7 @@
     <title>Clementine Web Remote</title>
     
     <!-- PWA & Apple Safari Meta Tags -->
+    <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="Clementine" />
@@ -13,7 +14,13 @@
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="icon" type="image/svg+xml" href="./icons/clementine-icon.svg" />
     <link rel="apple-touch-icon" href="./icons/icon-192.png" />
+    <link rel="apple-touch-icon" sizes="192x192" href="./icons/icon-192.png" />
+    <link rel="apple-touch-icon" sizes="512x512" href="./icons/icon-512.png" />
     <script>
+      // iOS Safari URL normalization: ensure trailing slash on GitHub Pages
+      if (window.location.host.includes('github.io') && window.location.pathname === '/clementine-remote') {
+        window.location.replace('/clementine-remote/' + window.location.search + window.location.hash);
+      }
       if ('serviceWorker' in navigator) {
         navigator.serviceWorker.getRegistrations().then(function(regs) {
           regs.forEach(function(r) { r.unregister(); });
