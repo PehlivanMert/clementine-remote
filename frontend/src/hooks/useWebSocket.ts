@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 
 type MessageHandler = (event: string, data: any) => void;
 
-export function useWebSocket(onMessage: MessageHandler) {
+export function useWebSocket(onMessage: MessageHandler, isAuthenticated: boolean = true) {
   const [isConnected, setIsConnected] = useState<boolean>(false);
   const [isReconnecting, setIsReconnecting] = useState<boolean>(false);
   const socketRef = useRef<WebSocket | null>(null);
@@ -14,9 +14,25 @@ export function useWebSocket(onMessage: MessageHandler) {
     onMessageRef.current = onMessage;
   }, [onMessage]);
 
-  const connect = useCallback(() => {
-    if (socketRef.current && (socketRef.current.readyState === WebSocket.OPEN || socketRef.current.readyState === WebSocket.CONNECTING)) {
+  const connect = useCallback((force = false) => {
+    // If not authenticated, do not attempt WS connection to prevent 403 handshake rejection
+    const token = localStorage.getItem('clementine_token');
+    if (!token) {
+      setIsConnected(false);
       return;
+    }
+
+    if (!force && socketRef.current && (socketRef.current.readyState === WebSocket.OPEN || socketRef.current.readyState === WebSocket.CONNECTING)) {
+      return;
+    }
+
+    if (socketRef.current) {
+      try {
+        socketRef.current.close();
+      } catch {
+        // ignore
+      }
+      socketRef.current = null;
     }
 
     const host = window.location.host;
@@ -37,10 +53,7 @@ export function useWebSocket(onMessage: MessageHandler) {
       wsBase = `${protocol}//${host}`;
     }
 
-    const token = localStorage.getItem('clementine_token');
-    const wsUrl = token
-      ? `${wsBase}/ws?token=${encodeURIComponent(token)}`
-      : `${wsBase}/ws`;
+    const wsUrl = `${wsBase}/ws?token=${encodeURIComponent(token)}`;
 
     try {
       const ws = new WebSocket(wsUrl);
@@ -68,12 +81,14 @@ export function useWebSocket(onMessage: MessageHandler) {
         setIsReconnecting(true);
         socketRef.current = null;
 
-        // Auto reconnect with exponential backoff
-        const timeout = backoffRef.current;
-        backoffRef.current = Math.min(backoffRef.current * 1.5, 8000);
-        reconnectTimeoutRef.current = window.setTimeout(() => {
-          connect();
-        }, timeout);
+        // Auto reconnect with exponential backoff if authenticated
+        if (localStorage.getItem('clementine_token')) {
+          const timeout = backoffRef.current;
+          backoffRef.current = Math.min(backoffRef.current * 1.5, 6000);
+          reconnectTimeoutRef.current = window.setTimeout(() => {
+            connect();
+          }, timeout);
+        }
       };
 
       ws.onerror = () => {
@@ -85,7 +100,15 @@ export function useWebSocket(onMessage: MessageHandler) {
   }, []);
 
   useEffect(() => {
-    connect();
+    if (isAuthenticated) {
+      connect(true);
+    } else {
+      if (socketRef.current) {
+        socketRef.current.close();
+        socketRef.current = null;
+      }
+      setIsConnected(false);
+    }
 
     return () => {
       if (reconnectTimeoutRef.current) {
@@ -95,7 +118,11 @@ export function useWebSocket(onMessage: MessageHandler) {
         socketRef.current.close();
       }
     };
+  }, [connect, isAuthenticated]);
+
+  const reconnect = useCallback(() => {
+    connect(true);
   }, [connect]);
 
-  return { isConnected, isReconnecting };
+  return { isConnected, isReconnecting, reconnect };
 }

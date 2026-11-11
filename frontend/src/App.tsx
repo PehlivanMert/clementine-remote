@@ -15,6 +15,7 @@ import { api, resolveServerUrl } from './api';
 
 export const App: React.FC = () => {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => !!localStorage.getItem('clementine_token'));
+  const [isServerOnline, setIsServerOnline] = useState<boolean>(false);
   const [currentTab, setCurrentTab] = useState<TabType>('player');
   const [status, setStatus] = useState<PlayerStatus | null>(null);
   const [playlists, setPlaylists] = useState<PlaylistInfo[]>([]);
@@ -34,30 +35,51 @@ export const App: React.FC = () => {
   const songsRef = React.useRef<TrackMetadata[]>(songs);
   songsRef.current = songs;
 
+  const fetchInitialState = useCallback(async () => {
+    try {
+      const s = await api.getStatus();
+      setStatus(s);
+      api.getSleepTimer().then(setSleepTimer).catch(() => {});
+      const pls = await api.getPlaylists();
+      setPlaylists(pls);
+      const activePl = pls.find((p) => p.active) || pls[0];
+      if (activePl) {
+        setSelectedPlaylistId((prev) => prev ?? activePl.id);
+        const sngs = await api.getPlaylistSongs(activePl.id);
+        setSongs(sngs);
+      }
+    } catch (e) {
+      console.error('Initial state fetch error:', e);
+    }
+  }, []);
+
+  const checkConnectivity = useCallback(async (force = false) => {
+    try {
+      await resolveServerUrl(force);
+      const sys = await api.getSystemInfo();
+      setIsServerOnline(true);
+
+      const auth = await api.checkAuth();
+      setIsAuthenticated(auth.authenticated);
+
+      if (auth.authenticated && sys.clementine_connected) {
+        await fetchInitialState();
+      }
+    } catch {
+      setIsServerOnline(false);
+    }
+  }, [fetchInitialState]);
+
   // Initial Auth Check & Tunnel/Server Endpoint Discovery
   useEffect(() => {
-    const initApp = async () => {
-      await resolveServerUrl();
-      try {
-        const data = await api.checkAuth();
-        setIsAuthenticated(data.authenticated);
-        if (data.authenticated) {
-          fetchInitialState();
-        }
-      } catch (err: any) {
-        // If server explicitly responded with 401, mark unauthenticated
-        if (err?.message === 'Authentication required') {
-          setIsAuthenticated(false);
-        }
-        // If it was a network/offline error, preserve local authenticated state
-      }
-    };
-    initApp();
+    checkConnectivity();
 
-    const handleAuthReq = () => setIsAuthenticated(false);
+    const handleAuthReq = () => {
+      setIsAuthenticated(false);
+    };
     window.addEventListener('auth_required', handleAuthReq);
     return () => window.removeEventListener('auth_required', handleAuthReq);
-  }, []);
+  }, [checkConnectivity]);
 
   // Save last played track to localStorage for persistent offline memory
   useEffect(() => {
@@ -75,24 +97,6 @@ export const App: React.FC = () => {
       }
     }
   }, [status?.current_track]);
-
-  const fetchInitialState = async () => {
-    try {
-      const s = await api.getStatus();
-      setStatus(s);
-      api.getSleepTimer().then(setSleepTimer).catch(() => {});
-      const pls = await api.getPlaylists();
-      setPlaylists(pls);
-      const activePl = pls.find((p) => p.active) || pls[0];
-      if (activePl) {
-        setSelectedPlaylistId((prev) => prev ?? activePl.id);
-        const sngs = await api.getPlaylistSongs(activePl.id);
-        setSongs(sngs);
-      }
-    } catch (e) {
-      console.error('Initial state fetch error:', e);
-    }
-  };
 
   // WebSocket Event Handler
   const handleWsEvent = useCallback((event: string, data: any) => {
@@ -191,7 +195,7 @@ export const App: React.FC = () => {
     }
   }, []);
 
-  const { isConnected: wsConnected } = useWebSocket(handleWsEvent);
+  const { isConnected: wsConnected, reconnect: reconnectWs } = useWebSocket(handleWsEvent, isAuthenticated);
 
   // Auto-poll when disconnected to smoothly recover when Clementine starts
   useEffect(() => {
@@ -200,18 +204,22 @@ export const App: React.FC = () => {
     const interval = setInterval(async () => {
       try {
         await resolveServerUrl();
-        const s = await api.getStatus();
-        if (s && s.clementine_connected) {
-          setStatus(s);
-          fetchInitialState();
+        const sys = await api.getSystemInfo();
+        setIsServerOnline(true);
+        if (sys.clementine_connected) {
+          const auth = await api.checkAuth();
+          setIsAuthenticated(auth.authenticated);
+          if (auth.authenticated) {
+            fetchInitialState();
+          }
         }
       } catch {
-        // Still offline, retry next cycle
+        setIsServerOnline(false);
       }
-    }, 3500);
+    }, 3000);
 
     return () => clearInterval(interval);
-  }, [wsConnected, status?.clementine_connected]);
+  }, [wsConnected, status?.clementine_connected, fetchInitialState]);
 
   const activePlaylist = playlists.find((p) => p.active) || playlists[0] || null;
   const currentViewedPlaylist = playlists.find((p) => p.id === selectedPlaylistId) || activePlaylist;
@@ -350,7 +358,7 @@ export const App: React.FC = () => {
             <OfflineView
               wsConnected={wsConnected}
               status={status}
-              onRetry={fetchInitialState}
+              onRetry={() => checkConnectivity(true)}
               onBrowseLibrary={() => setCurrentTab('queue')}
             />
           ) : (
@@ -406,12 +414,13 @@ export const App: React.FC = () => {
         queueCount={songs.length}
       />
 
-      {/* Authentication Modal - Only shown when connected to a live server and credentials needed */}
-      {!isAuthenticated && (wsConnected || status?.clementine_connected) && (
+      {/* Authentication Modal - Only shown when server is online and credentials needed */}
+      {!isAuthenticated && isServerOnline && (
         <LoginModal
           onSuccess={() => {
             setIsAuthenticated(true);
             fetchInitialState();
+            reconnectWs();
           }}
         />
       )}
