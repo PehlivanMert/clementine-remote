@@ -66,6 +66,7 @@ export interface ArtistItem {
   name: string;
   track_count: number;
   album_count: number;
+  formats?: string[];
 }
 
 export interface AlbumItem {
@@ -75,6 +76,7 @@ export interface AlbumItem {
   track_count: number;
   art_available: boolean;
   sample_track_url?: string;
+  formats?: string[];
 }
 
 export interface SearchResults {

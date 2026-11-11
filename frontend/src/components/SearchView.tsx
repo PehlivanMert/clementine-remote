@@ -8,8 +8,16 @@ interface SearchViewProps {
   playlists?: PlaylistInfo[];
 }
 
+const FORMAT_OPTIONS = [
+  { id: 'ALL', label: 'Tümü' },
+  { id: 'FLAC', label: 'FLAC' },
+  { id: 'MP3', label: 'MP3' },
+  { id: 'HIRES', label: 'Hi-Res' },
+];
+
 export const SearchView: React.FC<SearchViewProps> = ({ activePlaylistId = 1, playlists = [] }) => {
   const [query, setQuery] = useState('');
+  const [formatFilter, setFormatFilter] = useState('ALL');
   const [targetPlId, setTargetPlId] = useState<number>(activePlaylistId);
   const [results, setResults] = useState<SearchResults | null>(null);
   const [loading, setLoading] = useState(false);
@@ -27,7 +35,8 @@ export const SearchView: React.FC<SearchViewProps> = ({ activePlaylistId = 1, pl
     const timer = setTimeout(async () => {
       setLoading(true);
       try {
-        const data = await api.search(query);
+        const fmt = formatFilter === 'ALL' ? undefined : formatFilter;
+        const data = await api.search(query, fmt);
         setResults(data);
       } catch (e) {
         console.error(e);
@@ -37,7 +46,7 @@ export const SearchView: React.FC<SearchViewProps> = ({ activePlaylistId = 1, pl
     }, 250); // 250ms debounce
 
     return () => clearTimeout(timer);
-  }, [query]);
+  }, [query, formatFilter]);
 
   const handlePlayTrack = async (track: TrackMetadata) => {
     if (!track.url) return;
@@ -48,6 +57,38 @@ export const SearchView: React.FC<SearchViewProps> = ({ activePlaylistId = 1, pl
     e.stopPropagation();
     if (!track.url) return;
     await api.insertUrls(targetPlId, [track.url], false, true);
+  };
+
+  const renderFormatBadge = (track: TrackMetadata) => {
+    const fmt = track.audio_format?.toUpperCase();
+    if (!fmt) return null;
+
+    if (track.is_hi_res) {
+      return (
+        <span className="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40">
+          HI-RES
+        </span>
+      );
+    }
+    if (fmt === 'FLAC') {
+      return (
+        <span className="px-1.5 py-0.5 rounded text-[9px] font-mono font-semibold bg-cyan-500/15 text-cyan-300 border border-cyan-500/30">
+          FLAC
+        </span>
+      );
+    }
+    if (fmt === 'MP3') {
+      return (
+        <span className="px-1.5 py-0.5 rounded text-[9px] font-mono bg-white/10 text-neutral-400 border border-white/10">
+          MP3
+        </span>
+      );
+    }
+    return (
+      <span className="px-1.5 py-0.5 rounded text-[9px] font-mono bg-white/5 text-neutral-400 border border-white/10">
+        {fmt}
+      </span>
+    );
   };
 
   return (
@@ -71,7 +112,7 @@ export const SearchView: React.FC<SearchViewProps> = ({ activePlaylistId = 1, pl
       )}
 
       {/* Search Input Bar */}
-      <div className="relative mb-5">
+      <div className="relative mb-3">
         <Search className="w-4 h-4 text-neutral-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
         <input
           type="text"
@@ -91,6 +132,23 @@ export const SearchView: React.FC<SearchViewProps> = ({ activePlaylistId = 1, pl
         )}
       </div>
 
+      {/* Format Filter Pills (FLAC / MP3 / Hi-Res / All) */}
+      <div className="flex items-center space-x-1.5 mb-5 overflow-x-auto no-scrollbar py-0.5">
+        {FORMAT_OPTIONS.map((opt) => (
+          <button
+            key={opt.id}
+            onClick={() => setFormatFilter(opt.id)}
+            className={`px-3 py-1 rounded-full text-xs font-medium transition cursor-pointer select-none whitespace-nowrap active:scale-95 ${
+              formatFilter === opt.id
+                ? 'bg-amber-500 text-black font-semibold shadow-md shadow-amber-500/20'
+                : 'bg-white/5 hover:bg-white/10 text-neutral-400 hover:text-white border border-white/5'
+            }`}
+          >
+            {opt.label}
+          </button>
+        ))}
+      </div>
+
       {loading ? (
         <div className="text-center py-16 text-xs text-neutral-400">Searching library...</div>
       ) : results ? (
@@ -103,12 +161,30 @@ export const SearchView: React.FC<SearchViewProps> = ({ activePlaylistId = 1, pl
                 {results.artists.map((artist) => (
                   <div
                     key={artist.name}
-                    className="flex items-center space-x-3 p-2 rounded-xl bg-white/[0.02] border border-white/5"
+                    className="flex items-center justify-between p-2 rounded-xl bg-white/[0.02] border border-white/5"
                   >
-                    <div className="w-8 h-8 rounded-full bg-hifi-800 flex items-center justify-center">
-                      <User className="w-4 h-4 text-amber-500" />
+                    <div className="flex items-center space-x-3 overflow-hidden pr-2">
+                      <div className="w-8 h-8 rounded-full bg-hifi-800 flex items-center justify-center flex-shrink-0">
+                        <User className="w-4 h-4 text-amber-500" />
+                      </div>
+                      <span className="text-sm font-semibold text-white truncate">{artist.name}</span>
                     </div>
-                    <span className="text-sm font-semibold text-white truncate">{artist.name}</span>
+                    {artist.formats && artist.formats.length > 0 && (
+                      <div className="flex items-center space-x-1 flex-shrink-0">
+                        {artist.formats.map((f) => (
+                          <span
+                            key={f}
+                            className={`px-1.5 py-0.5 rounded text-[8px] font-mono font-semibold ${
+                              f === 'FLAC'
+                                ? 'bg-cyan-500/15 text-cyan-300 border border-cyan-500/30'
+                                : 'bg-white/5 text-neutral-400 border border-white/10'
+                            }`}
+                          >
+                            {f}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -128,7 +204,7 @@ export const SearchView: React.FC<SearchViewProps> = ({ activePlaylistId = 1, pl
                   return (
                     <div
                       key={`${album.artist}-${album.name}`}
-                      className="p-2 rounded-xl bg-white/[0.02] border border-white/5 flex items-center space-x-2.5"
+                      className="p-2 rounded-xl bg-white/[0.02] border border-white/5 flex items-center space-x-2.5 relative"
                     >
                       <div className="w-9 h-9 rounded-lg bg-hifi-800 border border-white/10 overflow-hidden flex items-center justify-center flex-shrink-0 relative">
                         {coverSrc ? (
@@ -147,6 +223,22 @@ export const SearchView: React.FC<SearchViewProps> = ({ activePlaylistId = 1, pl
                       <div className="min-w-0 flex-1">
                         <p className="text-xs font-semibold text-white truncate">{album.name}</p>
                         <p className="text-[10px] text-neutral-400 truncate">{album.artist}</p>
+                        {album.formats && album.formats.length > 0 && (
+                          <div className="flex items-center space-x-1 mt-0.5">
+                            {album.formats.map((f) => (
+                              <span
+                                key={f}
+                                className={`px-1 py-0.2 rounded text-[7px] font-mono font-semibold ${
+                                  f === 'FLAC'
+                                    ? 'text-cyan-300'
+                                    : 'text-neutral-400'
+                                }`}
+                              >
+                                {f}
+                              </span>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     </div>
                   );
@@ -195,6 +287,7 @@ export const SearchView: React.FC<SearchViewProps> = ({ activePlaylistId = 1, pl
                         </div>
                       </div>
                       <div className="flex items-center space-x-2 flex-shrink-0">
+                        {renderFormatBadge(track)}
                         <span className="text-xs font-mono text-neutral-400">{track.pretty_length}</span>
                         <button
                           onClick={(e) => handleEnqueueTrack(e, track)}

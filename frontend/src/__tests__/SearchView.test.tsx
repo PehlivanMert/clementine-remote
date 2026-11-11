@@ -30,10 +30,18 @@ describe('SearchView Component', () => {
     fireEvent.change(searchInput, { target: { value: 'Pink' } });
 
     await waitFor(() => {
-      expect(api.search).toHaveBeenCalledWith('Pink');
+      expect(api.search).toHaveBeenCalledWith('Pink', undefined);
       expect(screen.getAllByText('Pink Floyd')[0]).toBeInTheDocument();
       expect(screen.getByText('The Wall')).toBeInTheDocument();
       expect(screen.getByText('Comfortably Numb')).toBeInTheDocument();
+    });
+
+    // Test format filter buttons
+    const flacBtn = screen.getByRole('button', { name: 'FLAC' });
+    fireEvent.click(flacBtn);
+
+    await waitFor(() => {
+      expect(api.search).toHaveBeenCalledWith('Pink', 'FLAC');
     });
   });
 

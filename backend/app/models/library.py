@@ -6,6 +6,7 @@ class ArtistItem(BaseModel):
     name: str
     track_count: int = 0
     album_count: int = 0
+    formats: List[str] = []
 
 class AlbumItem(BaseModel):
     name: str
@@ -14,6 +15,7 @@ class AlbumItem(BaseModel):
     track_count: int = 0
     art_available: bool = False
     sample_track_url: Optional[str] = ""
+    formats: List[str] = []
 
 class SearchResults(BaseModel):
     query: str

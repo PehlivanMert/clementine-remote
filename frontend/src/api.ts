@@ -253,27 +253,33 @@ export const api = {
   },
 
   // Library
-  getArtists: async (): Promise<ArtistItem[]> => {
-    const res = await fetch('/api/library/artists', { headers: getHeaders() });
-    return handleResponse(res);
-  },
-
-  getAlbums: async (artist?: string): Promise<AlbumItem[]> => {
-    const url = artist ? `/api/library/albums?artist=${encodeURIComponent(artist)}` : '/api/library/albums';
+  getArtists: async (format?: string): Promise<ArtistItem[]> => {
+    const url = format ? `/api/library/artists?format=${encodeURIComponent(format)}` : '/api/library/artists';
     const res = await fetch(url, { headers: getHeaders() });
     return handleResponse(res);
   },
 
-  getTracks: async (artist?: string, album?: string): Promise<TrackMetadata[]> => {
+  getAlbums: async (artist?: string, format?: string): Promise<AlbumItem[]> => {
+    let url = '/api/library/albums?';
+    if (artist) url += `artist=${encodeURIComponent(artist)}&`;
+    if (format) url += `format=${encodeURIComponent(format)}&`;
+    const res = await fetch(url, { headers: getHeaders() });
+    return handleResponse(res);
+  },
+
+  getTracks: async (artist?: string, album?: string, format?: string): Promise<TrackMetadata[]> => {
     let url = '/api/library/tracks?';
     if (artist) url += `artist=${encodeURIComponent(artist)}&`;
     if (album) url += `album=${encodeURIComponent(album)}&`;
+    if (format) url += `format=${encodeURIComponent(format)}&`;
     const res = await fetch(url, { headers: getHeaders() });
     return handleResponse(res);
   },
 
-  search: async (query: string): Promise<SearchResults> => {
-    const res = await fetch(`/api/library/search?q=${encodeURIComponent(query)}`, { headers: getHeaders() });
+  search: async (query: string, format?: string): Promise<SearchResults> => {
+    let url = `/api/library/search?q=${encodeURIComponent(query)}`;
+    if (format) url += `&format=${encodeURIComponent(format)}`;
+    const res = await fetch(url, { headers: getHeaders() });
     return handleResponse(res);
   },
 

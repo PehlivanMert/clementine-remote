@@ -104,4 +104,19 @@ describe('LibraryView Component', () => {
       false
     );
   });
+
+  it('filters albums by format when format filter pill is clicked', async () => {
+    render(<LibraryView activePlaylistId={5} />);
+
+    await waitFor(() => {
+      expect(api.getAlbums).toHaveBeenCalledWith(undefined, undefined);
+    });
+
+    const flacPill = screen.getByRole('button', { name: 'FLAC' });
+    fireEvent.click(flacPill);
+
+    await waitFor(() => {
+      expect(api.getAlbums).toHaveBeenCalledWith(undefined, 'FLAC');
+    });
+  });
 });
