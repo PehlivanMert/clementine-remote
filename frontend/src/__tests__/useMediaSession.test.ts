@@ -85,4 +85,50 @@ describe('useMediaSession Hook', () => {
     expect(mockMediaSession.setActionHandler).toHaveBeenCalledWith('nexttrack', expect.any(Function));
     expect(mockMediaSession.setActionHandler).toHaveBeenCalledWith('seekto', expect.any(Function));
   });
+
+  it('does not re-create metadata when only position changes', () => {
+    const status1: PlayerStatus = {
+      state: 'Playing',
+      current_track: {
+        index: 0,
+        title: 'We Will Rock You',
+        artist: 'Queen',
+        album: 'Greatest Hits',
+        length: 122,
+        pretty_length: '2:02',
+        is_local: true,
+      },
+      position: 10,
+      duration: 122,
+      volume: 70,
+      repeat_mode: 0,
+      shuffle_mode: 0,
+      clementine_connected: true,
+      clementine_version: '1.4',
+    };
+
+    const { rerender } = renderHook(({ status }) => useMediaSession(status), {
+      initialProps: { status: status1 },
+    });
+
+    const initialMetadata = mockMediaSession.metadata;
+    expect(initialMetadata.title).toBe('We Will Rock You');
+
+    // Simulate 1 second position tick
+    const status2: PlayerStatus = {
+      ...status1,
+      position: 11,
+    };
+
+    rerender({ status: status2 });
+
+    // Metadata reference should NOT have changed!
+    expect(mockMediaSession.metadata).toBe(initialMetadata);
+    // setPositionState should have been called with new position
+    expect(mockMediaSession.setPositionState).toHaveBeenCalledWith({
+      duration: 122,
+      playbackRate: 1.0,
+      position: 11,
+    });
+  });
 });

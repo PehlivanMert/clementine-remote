@@ -5,7 +5,7 @@ import { api } from '../api';
 export function useMediaSession(status: PlayerStatus | null) {
   const silentAudioRef = useRef<HTMLAudioElement | null>(null);
 
-  // Initialize and maintain silent audio element for iOS Safari background wakefulness
+  // 1. Initialize and maintain silent audio element for iOS Safari background wakefulness
   useEffect(() => {
     if (typeof window === 'undefined' || typeof document === 'undefined') return;
 
@@ -16,13 +16,13 @@ export function useMediaSession(status: PlayerStatus | null) {
       audio.setAttribute('playsinline', 'true');
       audio.setAttribute('webkit-playsinline', 'true');
       audio.setAttribute('x-webkit-airplay', 'allow');
-      audio.volume = 0.01; // Audible to media system, silent to human ear
+      audio.volume = 0.01; // Inaudible keepalive stream
       silentAudioRef.current = audio;
     }
 
     const audio = silentAudioRef.current;
 
-    // Attach interaction handlers to unlock and resume audio on ANY user tap
+    // Attach interaction handlers to prime and resume audio on user gestures
     const handleInteraction = () => {
       if (audio && status?.state === 'Playing' && audio.paused) {
         try {
@@ -43,7 +43,7 @@ export function useMediaSession(status: PlayerStatus | null) {
     };
   }, [status?.state]);
 
-  // Sync silent audio playing state with Clementine status
+  // 2. Sync silent audio playing state with Clementine status
   useEffect(() => {
     const audio = silentAudioRef.current;
     if (!audio) return;
@@ -60,78 +60,18 @@ export function useMediaSession(status: PlayerStatus | null) {
     }
   }, [status?.state]);
 
-  // Register Media Session metadata and actions
+  // 3. Register static Media Session action handlers ONCE (never re-bind per second tick)
   useEffect(() => {
     if (typeof navigator === 'undefined' || !('mediaSession' in navigator)) {
       return;
     }
 
-    const currentTrack = status?.current_track;
-    const isPlaying = status?.state === 'Playing';
-
-    // Update metadata
-    if (currentTrack) {
-      const origin = typeof window !== 'undefined' ? window.location.origin : '';
-      const artBuster = encodeURIComponent(`${currentTrack.artist}-${currentTrack.title}`);
-      const artworkUrl = `${origin}/api/artwork/current?t=${artBuster}`;
-
-      const metadataObj = {
-        title: currentTrack.title || 'Clementine Player',
-        artist: currentTrack.artist || 'Clementine',
-        album: currentTrack.album || '',
-        artwork: [
-          { src: artworkUrl, sizes: '96x96', type: 'image/jpeg' },
-          { src: artworkUrl, sizes: '128x128', type: 'image/jpeg' },
-          { src: artworkUrl, sizes: '256x256', type: 'image/jpeg' },
-          { src: artworkUrl, sizes: '512x512', type: 'image/jpeg' },
-        ],
-      };
-
-      try {
-        if (typeof window.MediaMetadata !== 'undefined') {
-          navigator.mediaSession.metadata = new window.MediaMetadata(metadataObj);
-        } else {
-          navigator.mediaSession.metadata = metadataObj as any;
-        }
-      } catch (e) {
-        navigator.mediaSession.metadata = metadataObj as any;
-      }
-    } else {
-      navigator.mediaSession.metadata = null;
-    }
-
-    // Update playback state
-    navigator.mediaSession.playbackState = isPlaying
-      ? 'playing'
-      : status?.state === 'Paused'
-      ? 'paused'
-      : 'none';
-
-    // Update position state
-    if (
-      'setPositionState' in navigator.mediaSession &&
-      typeof navigator.mediaSession.setPositionState === 'function' &&
-      status?.duration &&
-      status.duration > 0 &&
-      typeof status?.position === 'number' &&
-      status.position >= 0
-    ) {
-      try {
-        navigator.mediaSession.setPositionState({
-          duration: status.duration,
-          playbackRate: isPlaying ? 1.0 : 0.0,
-          position: Math.min(Math.max(0, status.position), status.duration),
-        });
-      } catch (e) {}
-    }
-
-    // Action handlers with direct playback sync
     const actionHandlers: [MediaSessionAction, MediaSessionActionHandler][] = [
       [
         'play',
         async () => {
           await api.play();
-          if (silentAudioRef.current) {
+          if (silentAudioRef.current && silentAudioRef.current.paused) {
             try {
               const p = silentAudioRef.current.play();
               if (p && typeof p.catch === 'function') p.catch(() => {});
@@ -143,7 +83,7 @@ export function useMediaSession(status: PlayerStatus | null) {
         'pause',
         async () => {
           await api.pause();
-          if (silentAudioRef.current) {
+          if (silentAudioRef.current && !silentAudioRef.current.paused) {
             try {
               silentAudioRef.current.pause();
             } catch (e) {}
@@ -175,12 +115,88 @@ export function useMediaSession(status: PlayerStatus | null) {
         } catch (error) {}
       });
     };
-  }, [
-    status?.current_track?.title,
-    status?.current_track?.artist,
-    status?.current_track?.album,
-    status?.state,
-    status?.duration,
-    status?.position,
-  ]);
+  }, []);
+
+  // 4. Update track metadata ONLY when track title/artist/album changes (STABLE - prevents Dynamic Island spinning/flickering)
+  const currentTrack = status?.current_track;
+  const trackTitle = currentTrack?.title || '';
+  const trackArtist = currentTrack?.artist || '';
+  const trackAlbum = currentTrack?.album || '';
+
+  useEffect(() => {
+    if (typeof navigator === 'undefined' || !('mediaSession' in navigator)) {
+      return;
+    }
+
+    if (trackTitle || trackArtist) {
+      const origin = typeof window !== 'undefined' ? window.location.origin : '';
+      const artBuster = encodeURIComponent(`${trackArtist}-${trackTitle}`);
+      const artworkUrl = `${origin}/api/artwork/current?t=${artBuster}`;
+
+      const metadataObj = {
+        title: trackTitle || 'Clementine Player',
+        artist: trackArtist || 'Clementine',
+        album: trackAlbum || '',
+        artwork: [
+          { src: artworkUrl, sizes: '96x96', type: 'image/jpeg' },
+          { src: artworkUrl, sizes: '128x128', type: 'image/jpeg' },
+          { src: artworkUrl, sizes: '256x256', type: 'image/jpeg' },
+          { src: artworkUrl, sizes: '512x512', type: 'image/jpeg' },
+        ],
+      };
+
+      try {
+        if (typeof window.MediaMetadata !== 'undefined') {
+          navigator.mediaSession.metadata = new window.MediaMetadata(metadataObj);
+        } else {
+          navigator.mediaSession.metadata = metadataObj as any;
+        }
+      } catch (e) {
+        navigator.mediaSession.metadata = metadataObj as any;
+      }
+    } else {
+      navigator.mediaSession.metadata = null;
+    }
+  }, [trackTitle, trackArtist, trackAlbum]);
+
+  // 5. Update playback state (playing / paused)
+  useEffect(() => {
+    if (typeof navigator === 'undefined' || !('mediaSession' in navigator)) {
+      return;
+    }
+
+    const isPlaying = status?.state === 'Playing';
+    navigator.mediaSession.playbackState = isPlaying
+      ? 'playing'
+      : status?.state === 'Paused'
+      ? 'paused'
+      : 'none';
+  }, [status?.state]);
+
+  // 6. Update position scrubber state ONLY (isolated from metadata to avoid artwork refresh loops)
+  useEffect(() => {
+    if (
+      typeof navigator === 'undefined' ||
+      !('mediaSession' in navigator) ||
+      typeof navigator.mediaSession.setPositionState !== 'function'
+    ) {
+      return;
+    }
+
+    const isPlaying = status?.state === 'Playing';
+    if (
+      status?.duration &&
+      status.duration > 0 &&
+      typeof status?.position === 'number' &&
+      status.position >= 0
+    ) {
+      try {
+        navigator.mediaSession.setPositionState({
+          duration: status.duration,
+          playbackRate: isPlaying ? 1.0 : 0.0,
+          position: Math.min(Math.max(0, status.position), status.duration),
+        });
+      } catch (e) {}
+    }
+  }, [status?.position, status?.duration, status?.state]);
 }
