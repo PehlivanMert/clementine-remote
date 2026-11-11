@@ -44,8 +44,12 @@ export const App: React.FC = () => {
         if (data.authenticated) {
           fetchInitialState();
         }
-      } catch {
-        setIsAuthenticated(false);
+      } catch (err: any) {
+        // If server explicitly responded with 401, mark unauthenticated
+        if (err?.message === 'Authentication required') {
+          setIsAuthenticated(false);
+        }
+        // If it was a network/offline error, preserve local authenticated state
       }
     };
     initApp();
@@ -402,8 +406,8 @@ export const App: React.FC = () => {
         queueCount={songs.length}
       />
 
-      {/* Authentication Modal */}
-      {!isAuthenticated && (
+      {/* Authentication Modal - Only shown when connected to a live server and credentials needed */}
+      {!isAuthenticated && (wsConnected || status?.clementine_connected) && (
         <LoginModal
           onSuccess={() => {
             setIsAuthenticated(true);
