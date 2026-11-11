@@ -3,6 +3,7 @@ set -e
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$PROJECT_DIR/frontend"
 npm run build
+cp "$PROJECT_DIR/frontend/dist/index.html" "$PROJECT_DIR/frontend/dist/404.html"
 cd "$PROJECT_DIR/frontend/dist"
 git init -q
 git checkout -b gh-pages -q
