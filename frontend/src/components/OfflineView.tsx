@@ -61,18 +61,18 @@ export const OfflineView: React.FC<OfflineViewProps> = ({
       {/* Background Cinematic Artwork with Ambient Gradients */}
       <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none">
         <picture>
-          <source srcSet="/offline_bg.webp" type="image/webp" />
+          <source srcSet="./offline_bg.webp" type="image/webp" />
           <img
-            src="/offline_bg.jpg"
+            src="./offline_bg.jpg"
             alt="Hi-Fi Offline Artwork"
-            className="w-full h-full object-cover object-center filter brightness-[0.45] saturate-[1.1] scale-105 transition-transform duration-1000"
+            className="w-full h-full object-cover object-center filter brightness-[0.55] saturate-[1.15] scale-105 transition-transform duration-1000"
           />
         </picture>
         {/* Soft Radial & Linear Vignettes */}
-        <div className="absolute inset-0 bg-gradient-to-t from-hifi-950 via-hifi-950/60 to-hifi-950/80" />
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_0%,rgba(12,13,16,0.85)_100%)]" />
+        <div className="absolute inset-0 bg-gradient-to-t from-hifi-950 via-hifi-950/40 to-hifi-950/60" />
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_20%,rgba(7,8,10,0.75)_100%)]" />
         {/* Ambient Warm Amber Glow */}
-        <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[340px] h-[340px] bg-amber-500/10 rounded-full blur-[110px] pointer-events-none animate-pulse" />
+        <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[340px] h-[340px] bg-amber-500/15 rounded-full blur-[100px] pointer-events-none animate-pulse" />
       </div>
 
       {/* Main Glassmorphic Container */}
